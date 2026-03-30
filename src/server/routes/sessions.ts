@@ -81,6 +81,43 @@ app.post("/headless", async (c) => {
   return c.json({ headless: isHeadless(), message: headless ? "Headless ON — watch in Preview" : "Headless OFF — visible browser" });
 });
 
+// List available Chrome profiles
+app.get("/profiles", async (c) => {
+  try {
+    const { readdirSync, existsSync } = await import("fs");
+    const { join } = await import("path");
+    const { homedir, platform } = await import("os");
+
+    let chromeDir: string;
+    const os = platform();
+    if (os === "darwin") {
+      chromeDir = join(homedir(), "Library/Application Support/Google/Chrome");
+    } else if (os === "win32") {
+      chromeDir = join(process.env.LOCALAPPDATA || "", "Google/Chrome/User Data");
+    } else {
+      chromeDir = join(homedir(), ".config/google-chrome");
+    }
+
+    if (!existsSync(chromeDir)) {
+      return c.json({ profiles: [], error: "Chrome not found" });
+    }
+
+    const dirs = readdirSync(chromeDir);
+    const profiles = dirs
+      .filter((d) => d === "Default" || /^Profile \d+$/.test(d))
+      .map((d) => {
+        // Check if profile has Facebook cookies
+        const cookiesPath = join(chromeDir, d, "Cookies");
+        const hasCookies = existsSync(cookiesPath);
+        return { name: d, hasCookies };
+      });
+
+    return c.json({ profiles, currentProfile: process.env.CHROME_PROFILE || "Profile 8", os });
+  } catch (e: any) {
+    return c.json({ profiles: [], error: e.message });
+  }
+});
+
 // Close Playwright connection
 app.post("/close-browser", async (c) => {
   await closeBrowser();
