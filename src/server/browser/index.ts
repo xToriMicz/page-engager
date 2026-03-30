@@ -1,56 +1,47 @@
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type BrowserContext } from "playwright";
+import { homedir } from "os";
+import { join } from "path";
 
-let browser: Browser | null = null;
+let context: BrowserContext | null = null;
 
-const CDP_URL = "http://localhost:9222";
+const CHROME_PROFILE = join(homedir(), "Library/Application Support/Google/Chrome");
+const PROFILE_DIR = "Profile 8";
 
-// Get WebSocket URL directly from Chrome CDP
-async function getWsEndpoint(): Promise<string> {
-  const res = await fetch(`${CDP_URL}/json/version`);
-  const data = await res.json() as any;
-  return data.webSocketDebuggerUrl;
-}
-
-// Connect to running Chrome via CDP
+// Launch persistent context with real Chrome profile
 export async function connectToChrome(): Promise<BrowserContext> {
-  if (browser && browser.isConnected()) {
-    const contexts = browser.contexts();
-    if (contexts.length > 0) return contexts[0];
-  }
+  if (context) return context;
 
-  // Fetch WS endpoint directly to avoid Bun timeout issue
-  const wsUrl = await getWsEndpoint();
-  browser = await chromium.connectOverCDP(wsUrl);
-  const contexts = browser.contexts();
-  if (contexts.length === 0) {
-    throw new Error("No browser contexts found. Make sure Chrome is open with a profile.");
-  }
-  return contexts[0];
+  context = await chromium.launchPersistentContext(
+    join(CHROME_PROFILE, PROFILE_DIR),
+    {
+      channel: "chrome",
+      headless: false,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--no-first-run",
+        "--no-default-browser-check",
+      ],
+      viewport: { width: 1280, height: 800 },
+    }
+  );
+  return context;
 }
 
 export async function isConnected(): Promise<boolean> {
-  try {
-    const res = await fetch(`${CDP_URL}/json/version`);
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return context !== null;
 }
 
 export async function getChromeInfo(): Promise<{ browser: string; connected: boolean }> {
-  try {
-    const res = await fetch(`${CDP_URL}/json/version`);
-    const data = await res.json() as any;
-    return { browser: data.Browser || "Chrome", connected: true };
-  } catch {
-    return { browser: "", connected: false };
-  }
+  return {
+    browser: context ? "Chrome (persistent profile)" : "",
+    connected: context !== null,
+  };
 }
 
 export async function closeBrowser() {
-  if (browser) {
-    await browser.close().catch(() => {});
-    browser = null;
+  if (context) {
+    await context.close().catch(() => {});
+    context = null;
   }
 }
 
