@@ -9,11 +9,39 @@ app.get("/status", async (c) => {
   return c.json({ ...info, currentPage: getCurrentPage() });
 });
 
-// List managed pages
+// List managed pages (cached)
+let cachedPages: { name: string; url: string }[] | null = null;
+
+const NOISE = ["Meta Business Suite", "กล่องข้อความ", "ข้อมูลเชิงลึก", "ดูทั้งหมด"];
+const NOISE_PATTERNS = ["ได้แสดง", "ยังไม่ได้อ่าน", "เพิ่มโพสต์", "ติดตามคุณ", "ถูกใจ", "กล่าวถึง"];
+
+function filterPages(pages: { name: string; url: string }[]) {
+  return pages.filter((p) =>
+    p.name.length < 50 &&
+    !NOISE.includes(p.name) &&
+    !NOISE_PATTERNS.some((n) => p.name.includes(n))
+  );
+}
+
 app.get("/pages", async (c) => {
   try {
-    const pages = await listManagedPages();
-    return c.json({ pages, currentPage: getCurrentPage() });
+    if (cachedPages) {
+      return c.json({ pages: cachedPages, currentPage: getCurrentPage(), cached: true });
+    }
+    const raw = await listManagedPages();
+    cachedPages = filterPages(raw);
+    return c.json({ pages: cachedPages, currentPage: getCurrentPage(), cached: false });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Force refresh pages cache
+app.post("/pages/refresh", async (c) => {
+  try {
+    const raw = await listManagedPages();
+    cachedPages = filterPages(raw);
+    return c.json({ pages: cachedPages, currentPage: getCurrentPage() });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }

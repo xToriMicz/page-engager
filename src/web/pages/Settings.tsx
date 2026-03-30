@@ -23,17 +23,19 @@ export function Settings({ onPageChange }: Props) {
     setLoading(true);
     try {
       const data = await api.getPages();
-      // Filter to actual pages (has facebook.com profile/page URL, short name)
-      const filtered = data.pages.filter((p: ManagedPage) =>
-        p.name.length < 50 &&
-        !p.name.includes("ได้แสดง") &&
-        !p.name.includes("ยังไม่ได้อ่าน") &&
-        !p.name.includes("เพิ่มโพสต์") &&
-        !p.name.includes("ดูทั้งหมด") &&
-        !["Meta Business Suite", "กล่องข้อความ", "ข้อมูลเชิงลึก"].includes(p.name)
-      );
-      setPages(filtered);
+      setPages(data.pages || []);
     } catch { setPages([]); }
+    setLoading(false);
+  };
+
+  const refreshPages = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/sessions/pages/refresh", { method: "POST" });
+      const data = await res.json();
+      setPages(data.pages || []);
+      toast("Pages refreshed", "success");
+    } catch { toast("Refresh failed", "error"); }
     setLoading(false);
   };
 
@@ -60,7 +62,12 @@ export function Settings({ onPageChange }: Props) {
     <div className="space-y-4">
       {/* Pages */}
       <Card>
-        <CardTitle>Your pages</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Your pages</CardTitle>
+          <Button variant="ghost" size="xs" onClick={refreshPages} disabled={loading}>
+            {loading ? "..." : "Refresh"}
+          </Button>
+        </div>
         {loading ? (
           <div className="mt-3 space-y-3">
             <Skeleton className="h-12 w-full" />
