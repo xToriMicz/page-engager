@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
+import { Button, Card, Input } from "../components/ui";
+import { useToast } from "../components/ui/Toast";
+import type { Target, Template, Comment, Post } from "../types";
 
 export function Dashboard() {
-  const [targets, setTargets] = useState<any[]>([]);
-  const [comments, setComments] = useState<any[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [chromeConnected, setChromeConnected] = useState(false);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
     api.getTargets().then(setTargets);
@@ -26,61 +30,57 @@ export function Dashboard() {
       const result = await api.scanPosts(selectedTarget);
       setPosts(result.posts);
     } catch (e: any) {
-      alert(e.message);
+      toast(e.message, "error");
     }
     setScanning(false);
   };
 
-  const handleSend = async (post: any) => {
+  const handleSend = async (post: Post) => {
     if (!commentText.trim() || !selectedTarget) return;
     setSending(true);
     try {
       const result = await api.sendComment({
         targetId: selectedTarget,
         postUrl: post.url,
-        postText: post.text,
+        postText: post.text ?? undefined,
         commentText,
       });
       if (result.status === "sent") {
-        alert("Comment sent!");
+        toast("Comment sent!", "success");
         setCommentText("");
         api.getComments().then(setComments);
       } else {
-        alert(`Failed: ${result.error}`);
+        toast(`Failed: ${result.error}`, "error");
       }
     } catch (e: any) {
-      alert(e.message);
+      toast(e.message, "error");
     }
     setSending(false);
   };
 
-  // Chrome connection status for display
-
   return (
     <div>
-      <h1 style={{ marginBottom: "20px" }}>Dashboard</h1>
+      <h1 className="text-xl font-bold mb-5">Dashboard</h1>
 
-      {/* Status */}
-      <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
+      {/* Status Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatusCard label="Targets" value={targets.length} />
         <StatusCard label="Templates" value={templates.length} />
         <StatusCard label="Comments Sent" value={comments.filter((c) => c.status === "sent").length} />
         <StatusCard
           label="Chrome"
           value={chromeConnected ? "Connected" : "Disconnected"}
-          color={chromeConnected ? "#22c55e" : "#ef4444"}
+          color={chromeConnected ? "text-green-500" : "text-red-500"}
         />
       </div>
 
       {/* Scan & Comment */}
-      <div style={cardStyle}>
-        <h3 style={{ marginBottom: "12px" }}>Scan & Comment</h3>
-
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+      <Card title="Scan & Comment">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <select
             value={selectedTarget ?? ""}
             onChange={(e) => setSelectedTarget(Number(e.target.value) || null)}
-            style={inputStyle}
+            className="flex-1 px-3 py-2 bg-dark-700 border border-dark-500 rounded-md text-dark-100 text-sm focus:outline-none focus:border-blue-500"
           >
             <option value="">-- Select Target --</option>
             {targets.map((t) => (
@@ -89,130 +89,91 @@ export function Dashboard() {
               </option>
             ))}
           </select>
-          <button onClick={handleScan} disabled={!selectedTarget || scanning} style={btnStyle}>
+          <Button onClick={handleScan} disabled={!selectedTarget || scanning}>
             {scanning ? "Scanning..." : "Scan Posts"}
-          </button>
+          </Button>
         </div>
 
         {posts.length > 0 && (
           <div>
-            <h4 style={{ marginBottom: "8px" }}>Posts Found ({posts.length})</h4>
+            <h4 className="text-sm font-semibold mb-2">Posts Found ({posts.length})</h4>
             {posts.map((post, i) => (
-              <div key={i} style={{ ...cardStyle, marginBottom: "12px" }}>
-                <p style={{ marginBottom: "8px", fontSize: "13px", color: "#aaa" }}>
-                  {post.timestamp}
-                </p>
-                <p style={{ marginBottom: "12px" }}>
-                  {post.text || <em style={{ color: "#666" }}>No text</em>}
+              <Card key={i} className="mb-3">
+                <p className="text-xs text-dark-200 mb-2">{post.timestamp}</p>
+                <p className="mb-3">
+                  {post.text || <em className="text-dark-400">No text</em>}
                 </p>
 
                 {/* Template quick-fill */}
-                <div style={{ display: "flex", gap: "4px", marginBottom: "8px", flexWrap: "wrap" }}>
+                <div className="flex flex-wrap gap-1 mb-2">
                   {templates.map((t) => (
-                    <button
+                    <Button
                       key={t.id}
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setCommentText(t.content)}
-                      style={{ ...btnSmallStyle, background: "#374151" }}
                     >
                       {t.name}
-                    </button>
+                    </Button>
                   ))}
                 </div>
 
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
+                <div className="flex gap-2">
+                  <Input
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Type comment..."
-                    style={{ ...inputStyle, flex: 1 }}
+                    className="flex-1"
                   />
-                  <button
+                  <Button
                     onClick={() => handleSend(post)}
                     disabled={sending || !commentText.trim()}
-                    style={{ ...btnStyle, background: "#16a34a" }}
+                    className="!bg-green-600 hover:!bg-green-700"
                   >
                     {sending ? "Sending..." : "Send"}
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Recent Comments */}
-      <div style={{ ...cardStyle, marginTop: "16px" }}>
-        <h3 style={{ marginBottom: "12px" }}>Recent Comments</h3>
+      <Card title="Recent Comments" className="mt-4">
         {comments.length === 0 ? (
-          <p style={{ color: "#666" }}>No comments yet</p>
+          <p className="text-dark-400 text-sm">No comments yet</p>
         ) : (
           comments.slice(0, 10).map((c) => (
             <div
               key={c.id}
-              style={{
-                padding: "8px 12px",
-                borderBottom: "1px solid #333",
-                display: "flex",
-                justifyContent: "space-between",
-              }}
+              className="flex justify-between items-center px-3 py-2 border-b border-dark-600 text-sm"
             >
-              <span>{c.commentText.slice(0, 80)}</span>
+              <span className="truncate mr-4">{c.commentText.slice(0, 80)}</span>
               <span
-                style={{
-                  color: c.status === "sent" ? "#22c55e" : c.status === "failed" ? "#ef4444" : "#eab308",
-                  fontSize: "12px",
-                }}
+                className={`text-xs shrink-0 ${
+                  c.status === "sent"
+                    ? "text-green-500"
+                    : c.status === "failed"
+                      ? "text-red-500"
+                      : "text-yellow-500"
+                }`}
               >
                 {c.status}
               </span>
             </div>
           ))
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
 function StatusCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
-    <div style={{ ...cardStyle, flex: 1, textAlign: "center" }}>
-      <div style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>{label}</div>
-      <div style={{ fontSize: "24px", fontWeight: "bold", color: color || "#fff" }}>{value}</div>
-    </div>
+    <Card className="text-center">
+      <div className="text-xs text-dark-300 mb-1">{label}</div>
+      <div className={`text-2xl font-bold ${color || "text-white"}`}>{value}</div>
+    </Card>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  background: "#1a1a1a",
-  border: "1px solid #333",
-  borderRadius: "8px",
-  padding: "16px",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  background: "#2a2a2a",
-  border: "1px solid #444",
-  borderRadius: "6px",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "#2563eb",
-  border: "none",
-  borderRadius: "6px",
-  color: "#fff",
-  cursor: "pointer",
-  fontSize: "14px",
-};
-
-const btnSmallStyle: React.CSSProperties = {
-  padding: "4px 8px",
-  border: "none",
-  borderRadius: "4px",
-  color: "#e0e0e0",
-  cursor: "pointer",
-  fontSize: "12px",
-};

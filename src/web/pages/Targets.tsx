@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
+import { Button, Card, Input } from "../components/ui";
+import type { Target } from "../types";
 
 export function Targets() {
-  const [targets, setTargets] = useState<any[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [resolving, setResolving] = useState(false);
@@ -11,7 +13,7 @@ export function Targets() {
   useEffect(() => { load(); }, []);
 
   const handleUrlBlur = async () => {
-    if (!url || name) return; // don't override if name already set
+    if (!url || name) return;
     if (!url.includes("facebook.com")) return;
     setResolving(true);
     try {
@@ -37,96 +39,52 @@ export function Targets() {
 
   return (
     <div>
-      <h1 style={{ marginBottom: "20px" }}>Target Pages</h1>
+      <h1 className="text-xl font-bold mb-5">Target Pages</h1>
 
-      <div style={{ ...cardStyle, marginBottom: "16px" }}>
-        <h3 style={{ marginBottom: "12px" }}>Add Target</h3>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <input
+      <Card title="Add Target" className="mb-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={resolving ? "Fetching page name..." : "Page name (auto-fill)"}
-            style={{ ...inputStyle, width: "250px" }}
+            className="sm:w-60"
           />
-          <input
+          <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onBlur={handleUrlBlur}
             placeholder="https://facebook.com/pagename"
-            style={{ ...inputStyle, flex: 1 }}
+            className="flex-1"
           />
-          <button onClick={handleAdd} style={btnStyle}>
-            Add
-          </button>
+          <Button onClick={handleAdd}>Add</Button>
         </div>
-      </div>
+      </Card>
 
-      <div style={cardStyle}>
-        <h3 style={{ marginBottom: "12px" }}>Targets ({targets.length})</h3>
+      <Card title={`Targets (${targets.length})`}>
         {targets.length === 0 ? (
-          <p style={{ color: "#666" }}>No targets yet</p>
+          <p className="text-dark-400 text-sm">No targets yet</p>
         ) : (
           targets.map((t) => (
             <div
               key={t.id}
-              style={{
-                padding: "12px",
-                borderBottom: "1px solid #333",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+              className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border-b border-dark-600 gap-2"
             >
-              <div>
-                <div style={{ fontWeight: "bold" }}>{t.name}</div>
-                <div style={{ fontSize: "12px", color: "#888" }}>{t.url}</div>
+              <div className="min-w-0">
+                <div className="font-bold text-sm">{t.name}</div>
+                <div className="text-xs text-dark-300 truncate">{t.url}</div>
               </div>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: t.active ? "#22c55e" : "#666",
-                  }}
-                >
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs ${t.active ? "text-green-500" : "text-dark-400"}`}>
                   {t.active ? "Active" : "Inactive"}
                 </span>
-                <button
-                  onClick={() => handleDelete(t.id)}
-                  style={{ ...btnStyle, background: "#dc2626", padding: "4px 12px", fontSize: "12px" }}
-                >
+                <Button variant="danger" size="sm" onClick={() => handleDelete(t.id)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           ))
         )}
-      </div>
+      </Card>
     </div>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  background: "#1a1a1a",
-  border: "1px solid #333",
-  borderRadius: "8px",
-  padding: "16px",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  background: "#2a2a2a",
-  border: "1px solid #444",
-  borderRadius: "6px",
-  color: "#e0e0e0",
-  fontSize: "14px",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "#2563eb",
-  border: "none",
-  borderRadius: "6px",
-  color: "#fff",
-  cursor: "pointer",
-  fontSize: "14px",
-};
