@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --filter '*' dev",
-    "dev:server": "bun run --hot src/server/index.ts",
+    "dev:server": "npx tsx watch src/server/index.ts",
     "dev:web": "vite",
     "build": "vite build",
     "db:generate": "drizzle-kit generate",
@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.11",
     "@tailwindcss/vite": "^4.2.2",
     "better-sqlite3": "^11.8.0",
     "drizzle-orm": "^0.39.0",
@@ -21,7 +22,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

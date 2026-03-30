@@ -4,6 +4,13 @@ let browser: Browser | null = null;
 
 const CDP_URL = "http://localhost:9222";
 
+// Get WebSocket URL directly from Chrome CDP
+async function getWsEndpoint(): Promise<string> {
+  const res = await fetch(`${CDP_URL}/json/version`);
+  const data = await res.json() as any;
+  return data.webSocketDebuggerUrl;
+}
+
 // Connect to running Chrome via CDP
 export async function connectToChrome(): Promise<BrowserContext> {
   if (browser && browser.isConnected()) {
@@ -11,7 +18,9 @@ export async function connectToChrome(): Promise<BrowserContext> {
     if (contexts.length > 0) return contexts[0];
   }
 
-  browser = await chromium.connectOverCDP(CDP_URL);
+  // Fetch WS endpoint directly to avoid Bun timeout issue
+  const wsUrl = await getWsEndpoint();
+  browser = await chromium.connectOverCDP(wsUrl);
   const contexts = browser.contexts();
   if (contexts.length === 0) {
     throw new Error("No browser contexts found. Make sure Chrome is open with a profile.");

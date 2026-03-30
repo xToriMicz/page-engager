@@ -25,7 +25,6 @@ seedTemplates();
 
 console.log("🚀 Page Engager API running on http://localhost:3000");
 
-export default {
-  port: 3000,
-  fetch: app.fetch,
-};
+import { serve } from "@hono/node-server";
+
+serve({ fetch: app.fetch, port: 3000 });
