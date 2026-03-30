@@ -81,11 +81,16 @@ app.put("/:id", async (c) => {
   return c.json(result[0]);
 });
 
-// Delete target
+// Delete target (and its comments)
 app.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
-  await db.delete(schema.targets).where(eq(schema.targets.id, id));
-  return c.json({ ok: true });
+  try {
+    await db.delete(schema.comments).where(eq(schema.comments.targetId, id));
+    await db.delete(schema.targets).where(eq(schema.targets.id, id));
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
 });
 
 async function fetchPageName(url: string): Promise<string> {
