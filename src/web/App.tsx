@@ -28,7 +28,7 @@ export function App() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background text-foreground">
       {/* === Top Bar === */}
-      <header className="fixed top-0 left-0 right-0 z-40 h-12 bg-surface/80 backdrop-blur-md border-b border-ring flex items-center justify-between px-4 md:pl-[72px]">
+      <header className="fixed top-0 left-0 right-0 z-40 h-12 bg-surface/80 backdrop-blur-md border-b border-ring flex items-center justify-between px-4 md:pl-[200px]">
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold tracking-tight text-foreground">Page Engager</span>
           <span className="text-subtle">|</span>
@@ -43,8 +43,8 @@ export function App() {
         </div>
       </header>
 
-      {/* === Desktop Sidebar (icon-only, expand on hover) === */}
-      <nav className="hidden md:flex fixed inset-y-0 left-0 z-30 w-14 hover:w-48 bg-surface border-r border-ring flex-col pt-12 transition-all duration-200 overflow-hidden group/nav">
+      {/* === Desktop Sidebar (always expanded) === */}
+      <nav className="hidden md:flex fixed inset-y-0 left-0 z-30 w-48 bg-surface border-r border-ring flex-col pt-12">
         <div className="flex-1 flex flex-col gap-0.5 pt-3 px-2">
           {NAV.map((item) => {
             const active = page === item.key;
@@ -64,7 +64,7 @@ export function App() {
                 }`}>
                   {item.icon}
                 </span>
-                <span className="opacity-0 group-hover/nav:opacity-100 transition-opacity duration-150">
+                <span className="">
                   {item.label}
                 </span>
               </button>
@@ -97,7 +97,7 @@ export function App() {
       </nav>
 
       {/* === Main Content === */}
-      <main className="flex-1 pt-12 pb-20 md:pb-0 md:ml-14 min-h-screen">
+      <main className="flex-1 pt-12 pb-20 md:pb-0 md:ml-48 min-h-screen">
         <div className="max-w-4xl mx-auto p-4 md:p-6 animate-fade-in">
           {page === "dashboard" && <Dashboard currentPage={currentPage} />}
           {page === "targets" && <Targets />}
