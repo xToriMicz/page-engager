@@ -106,10 +106,17 @@ app.post("/batch-ai", async (c) => {
   return c.json({ results });
 });
 
-// Generate comment — custom first, AI fallback
+// Generate comment — greeting for no caption, custom, or AI
 app.post("/generate", async (c) => {
   const body = await c.req.json<{ postText: string }>();
-  if (!body.postText) return c.json({ error: "postText required" }, 400);
+
+  const GREETINGS = ["สวัสดีครับ ทักทายครับ", "แวะมาเยี่ยมครับ", "ติดตามแล้วนะครับ", "สวัสดีครับ แวะมาทักทาย", "มาเยี่ยมชมครับ สู้ๆ นะครับ"];
+
+  // No caption → greeting
+  if (!body.postText || body.postText.trim().length < 10) {
+    const pick = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+    return c.json({ comment: pick, source: "greeting" });
+  }
 
   // Check for custom comments first
   const customComments = await db.select().from(schema.templates)

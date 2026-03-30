@@ -123,25 +123,42 @@ app.post("/run", async (c) => {
         if (autoAbort) break;
         const post = toComment[pi];
 
-        // Pick custom comment (random) or generate AI
+        // Pick comment based on post content
         emitAction(`Preparing comment for post ${pi + 1}/${toComment.length}...`);
         let commentText: string;
-        const customComments = await db.select().from(schema.templates)
-          .where(eq(schema.templates.category, "custom")).all();
+        const hasCaption = post.text && post.text.trim().length > 10;
 
-        if (customComments.length > 0) {
-          // Random pick from custom comments
-          const pick = customComments[Math.floor(Math.random() * customComments.length)];
-          commentText = pick.content;
-          emitAction(`Using custom comment: "${commentText.slice(0, 40)}..."`);
+        // Greeting comments for posts without caption (photo/video only)
+        const GREETING_COMMENTS = [
+          "สวัสดีครับ ทักทายครับ",
+          "แวะมาเยี่ยมครับ",
+          "ติดตามแล้วนะครับ",
+          "สวัสดีครับ แวะมาทักทาย",
+          "มาเยี่ยมชมครับ สู้ๆ นะครับ",
+          "ทักทายครับ ติดตามผลงานอยู่นะ",
+        ];
+
+        if (!hasCaption) {
+          // No caption → use greeting
+          commentText = GREETING_COMMENTS[Math.floor(Math.random() * GREETING_COMMENTS.length)];
+          emitAction(`No caption → greeting: "${commentText}"`);
         } else {
-          // AI generate
-          try {
-            commentText = await generateComment(post.text || "โพสต์ทั่วไป", pageName);
-          } catch {
-            emitError(`AI generate failed, skipping`);
-            totalFailed++;
-            continue;
+          // Has caption → custom comments or AI
+          const customComments = await db.select().from(schema.templates)
+            .where(eq(schema.templates.category, "custom")).all();
+
+          if (customComments.length > 0) {
+            const pick = customComments[Math.floor(Math.random() * customComments.length)];
+            commentText = pick.content;
+            emitAction(`Using custom: "${commentText.slice(0, 40)}..."`);
+          } else {
+            try {
+              commentText = await generateComment(post.text, pageName);
+              emitAction(`AI generated: "${commentText.slice(0, 40)}..."`);
+            } catch {
+              emitError(`AI failed, using greeting`);
+              commentText = GREETING_COMMENTS[Math.floor(Math.random() * GREETING_COMMENTS.length)];
+            }
           }
         }
 
