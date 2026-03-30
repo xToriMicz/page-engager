@@ -6,9 +6,10 @@ let browser: Browser | null = null;
 let context: BrowserContext | null = null;
 let cookiesInjected = false;
 let lastCommentTime = 0;
-let profileSwitched = false; // track if we've switched to page profile this session
+let profileSwitched = false;
+let reusablePage: import("playwright").Page | null = null; // shared page for lightweight ops
 
-const HEADLESS = process.env.HEADLESS === "true"; // default visible — see browser work in real-time
+const HEADLESS = process.env.HEADLESS !== "false"; // default headless — set HEADLESS=false to see browser
 const CHROME_PROFILE = process.env.CHROME_PROFILE || "Profile 8";
 const MIN_COMMENT_INTERVAL = 30_000; // 30 seconds between comments
 
@@ -92,7 +93,16 @@ export async function getChromeInfo() {
   };
 }
 
+// Get or create a reusable page for lightweight operations (fetchPageName, listPages)
+async function getReusablePage(): Promise<import("playwright").Page> {
+  const ctx = await connectToChrome();
+  if (reusablePage && !reusablePage.isClosed()) return reusablePage;
+  reusablePage = await ctx.newPage();
+  return reusablePage;
+}
+
 export async function closeBrowser() {
+  if (reusablePage) { await reusablePage.close().catch(() => {}); reusablePage = null; }
   if (context) { await context.close().catch(() => {}); context = null; }
   if (browser) { await browser.close().catch(() => {}); browser = null; }
   cookiesInjected = false;
@@ -112,8 +122,7 @@ function setCurrentPage(name: string) {
 }
 
 export async function listManagedPages(): Promise<ManagedPage[]> {
-  const ctx = await connectToChrome();
-  const page = await ctx.newPage();
+  const page = await getReusablePage();
   try {
     await page.goto("https://www.facebook.com/pages/?category=your_pages", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
@@ -165,27 +174,6 @@ export async function switchProfileOnPage(page: import("playwright").Page, pageN
     await profileMenu.click({ timeout: 5000 });
   }
   await page.waitForTimeout(2000);
-
-  // Debug: dump all visible text in the menu to see what's available
-  const menuDebug = await page.evaluate(() => {
-    const dialogs = document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"]');
-    const texts: string[] = [];
-    for (const d of dialogs) {
-      d.querySelectorAll('span, a, [role="button"]').forEach((el) => {
-        const t = el.textContent?.trim();
-        if (t && t.length > 1 && t.length < 80) texts.push(t);
-      });
-    }
-    // Also check general visible buttons/links
-    document.querySelectorAll('[role="button"], a').forEach((el) => {
-      const t = el.textContent?.trim();
-      if (t && t.includes("สลับ") || t?.includes("Switch") || t?.includes("โปรไฟล์") || t?.includes("profile")) {
-        texts.push(`[btn] ${t?.slice(0, 60)}`);
-      }
-    });
-    return texts.slice(0, 30);
-  });
-  console.log(`[switch] Menu items:`, JSON.stringify(menuDebug, null, 0));
 
   // Look for "ดูโปรไฟล์ทั้งหมด" → opens "เลือกโปรไฟล์" dialog
   const seeAll = page.locator('text=/ดูโปรไฟล์ทั้งหมด|See all profiles/i').first();

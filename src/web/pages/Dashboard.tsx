@@ -102,12 +102,15 @@ export function Dashboard({ currentPage }: Props) {
       }
     }
 
-    // AI analyze + generate comments for all posts
+    // AI analyze + generate comments — 3 at a time in parallel
     setScanProgress("AI analyzing posts...");
-    for (let i = 0; i < allPosts.length; i++) {
-      const post = allPosts[i];
-      if (post.text) {
-        setGenerating(i);
+    const BATCH_SIZE = 3;
+    for (let batch = 0; batch < allPosts.length; batch += BATCH_SIZE) {
+      const chunk = allPosts.slice(batch, batch + BATCH_SIZE);
+      setGenerating(batch);
+      await Promise.all(chunk.map(async (post: any, j: number) => {
+        const i = batch + j;
+        if (!post.text) return;
         try {
           const [ai, analysis] = await Promise.all([
             api.generateComment(post.text),
@@ -116,7 +119,7 @@ export function Dashboard({ currentPage }: Props) {
           setCommentTexts((prev) => ({ ...prev, [i]: ai.comment }));
           setAnalyses((prev) => ({ ...prev, [i]: analysis }));
         } catch {}
-      }
+      }));
     }
     setGenerating(null);
     setScanProgress("");

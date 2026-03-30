@@ -1,19 +1,20 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { WebSocketServer, WebSocket } from "ws";
-import { onPreview, isPreviewActive } from "../browser/preview";
+import { onPreview, isPreviewActive, addClient, removeClient } from "../browser/preview";
 
 const app = new Hono();
 const wsClients = new Set<WebSocket>();
 
-// WebSocket server on port 3001 — binary frame stream at 60 FPS
-const wss = new WebSocketServer({ port: 3001 });
+const WS_PORT = parseInt(process.env.WS_PORT || "3001");
+const wss = new WebSocketServer({ port: WS_PORT });
 wss.on("connection", (ws) => {
   wsClients.add(ws);
-  ws.on("close", () => wsClients.delete(ws));
-  ws.on("error", () => wsClients.delete(ws));
+  addClient();
+  ws.on("close", () => { wsClients.delete(ws); removeClient(); });
+  ws.on("error", () => { wsClients.delete(ws); removeClient(); });
 });
-console.log("🎬 Preview WebSocket on ws://localhost:3001");
+console.log(`🎬 Preview WebSocket on ws://localhost:${WS_PORT}`);
 
 // Listen for frame events and broadcast as binary
 onPreview((event) => {
@@ -61,7 +62,7 @@ app.get("/stream", (c) => {
 });
 
 app.get("/status", (c) => {
-  return c.json({ active: isPreviewActive(), wsPort: 3001 });
+  return c.json({ active: isPreviewActive(), wsPort: WS_PORT });
 });
 
 export default app;

@@ -10,6 +10,11 @@ export interface PreviewEvent {
 
 const listeners = new Set<PreviewListener>();
 let active = false;
+let clientCount = 0;
+
+export function addClient() { clientCount++; }
+export function removeClient() { clientCount = Math.max(0, clientCount - 1); }
+export function hasClients() { return clientCount > 0; }
 
 export function onPreview(fn: PreviewListener) {
   listeners.add(fn);
@@ -52,13 +57,18 @@ export async function startScreencast(page: Page): Promise<() => void> {
   try {
     const cdp = await (page as any).context().newCDPSession(page);
     let running = true;
-    const TARGET_FPS = 60;
+    const TARGET_FPS = 15; // reduced from 60 — saves CPU
     const FRAME_MS = 1000 / TARGET_FPS;
 
     console.log(`[preview] Starting ${TARGET_FPS} FPS capture loop`);
 
     (async () => {
       while (running && active) {
+        if (!hasClients()) {
+          // No clients watching — sleep longer, don't capture
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
         const t0 = performance.now();
         try {
           const { data } = await cdp.send("Page.captureScreenshot", {

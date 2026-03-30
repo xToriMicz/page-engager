@@ -58,6 +58,17 @@ app.post("/scan/:targetId", async (c) => {
       posts: JSON.stringify(posts),
     });
 
+    // Cleanup old scans — keep only 3 most recent per target
+    const oldScans = await db.select({ id: schema.scanCache.id })
+      .from(schema.scanCache)
+      .where(eq(schema.scanCache.targetId, targetId))
+      .orderBy(desc(schema.scanCache.scannedAt))
+      .offset(3)
+      .all();
+    for (const old of oldScans) {
+      await db.delete(schema.scanCache).where(eq(schema.scanCache.id, old.id));
+    }
+
     return c.json({ target: target.name, posts });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
