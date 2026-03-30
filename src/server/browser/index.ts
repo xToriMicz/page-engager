@@ -6,6 +6,7 @@ let browser: Browser | null = null;
 let context: BrowserContext | null = null;
 let cookiesInjected = false;
 let lastCommentTime = 0;
+let profileSwitched = false; // track if we've switched to page profile this session
 
 const HEADLESS = process.env.HEADLESS === "true"; // default visible — see browser work in real-time
 const CHROME_PROFILE = process.env.CHROME_PROFILE || "Profile 8";
@@ -39,6 +40,46 @@ export async function connectToChrome(): Promise<BrowserContext> {
   return context;
 }
 
+// Ensure we're browsing as the page — call once, remembers for the session
+export async function ensurePageProfile(page: import("playwright").Page): Promise<void> {
+  const pageName = getCurrentPage();
+  if (!pageName) return;
+  if (profileSwitched) return; // already switched this session
+
+  console.log(`[profile] Checking if already on ${pageName}...`);
+
+  // Go to facebook.com to check current profile
+  await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForTimeout(2000);
+
+  // Check if current profile matches page name
+  const isPage = await page.evaluate((name: string) => {
+    const imgs = document.querySelectorAll('[aria-label="โปรไฟล์ของคุณ"] img, [aria-label="Your profile"] img');
+    for (const img of imgs) {
+      if (img.getAttribute("alt")?.includes(name)) return true;
+    }
+    // Also check meta tag or heading
+    const h1 = document.querySelector('h1');
+    if (h1?.textContent?.includes(name)) return true;
+    return false;
+  }, pageName);
+
+  if (isPage) {
+    console.log(`[profile] Already on ${pageName}`);
+    profileSwitched = true;
+    return;
+  }
+
+  console.log(`[profile] Switching to ${pageName}...`);
+  try {
+    await switchProfileOnPage(page, pageName);
+    profileSwitched = true;
+    console.log(`[profile] Switched to ${pageName}`);
+  } catch (e) {
+    console.log(`[profile] Switch failed: ${e}`);
+  }
+}
+
 export async function isConnected(): Promise<boolean> {
   return browser?.isConnected() ?? false;
 }
@@ -55,6 +96,7 @@ export async function closeBrowser() {
   if (context) { await context.close().catch(() => {}); context = null; }
   if (browser) { await browser.close().catch(() => {}); browser = null; }
   cookiesInjected = false;
+  profileSwitched = false;
 }
 
 // --- Page Switching (persisted) ---
@@ -235,14 +277,43 @@ export async function scanTargetPosts(targetUrl: string, limit = 10): Promise<Sc
   const page = await ctx.newPage();
   const stopCapture = await startScreencast(page);
   try {
+    // Ensure page profile before scanning
+    await ensurePageProfile(page);
+
     emitAction(`Scanning target: ${targetUrl}`);
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(targetUrl, { waitUntil: "networkidle", timeout: 60000 }).catch(() => {
+      // fallback if networkidle times out — page is probably loaded enough
+    });
+    // Wait for posts to appear in DOM
+    await page.waitForSelector('[role="article"]', { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(2000);
-    emitAction("Scrolling to load posts...");
-    for (let i = 0; i < 3; i++) {
-      await page.evaluate(() => window.scrollBy(0, 1000));
-      await page.waitForTimeout(1000);
+
+    // Switch to "Newest first" / "ใหม่ล่าสุด" sort order
+    emitAction("Switching to newest posts first...");
+    const sortBtn = page.locator('text=/เกี่ยวข้องมากที่สุด|Most relevant|ยอดนิยม|Top posts/i').first();
+    if (await sortBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await sortBtn.click();
+      await page.waitForTimeout(2000);
+      const newestOpt = page.locator('text=/ใหม่ล่าสุด|Newest|Most recent|ล่าสุด/i').first();
+      if (await newestOpt.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await newestOpt.click();
+        // Wait for posts to reload after sort
+        await page.waitForTimeout(3000);
+        await page.waitForSelector('[role="article"]', { timeout: 10000 }).catch(() => {});
+        emitAction("Sorted by newest first");
+      }
     }
+
+    emitAction("Reading posts...");
+    for (let i = 0; i < 4; i++) {
+      // Scroll like a human — variable distance and speed
+      const scrollAmount = 600 + Math.floor(Math.random() * 500);
+      await page.evaluate((px) => window.scrollBy({ top: px, behavior: "smooth" }), scrollAmount);
+      // Human reading time — 3-6 seconds per scroll
+      await page.waitForTimeout(3000 + Math.random() * 3000);
+    }
+    // Pause to "read" like a human
+    await page.waitForTimeout(2000 + Math.random() * 2000);
     const posts = await page.evaluate((maxPosts: number) => {
       const results: { url: string; text: string; author: string; timestamp: string; commentCount: number; hasImage: boolean; hasVideo: boolean; reactionCount: string }[] = [];
       const allArticles = document.querySelectorAll('[role="article"]');
@@ -267,25 +338,47 @@ export async function scanTargetPosts(targetUrl: string, limit = 10): Promise<Sc
         let timestamp = "";
         for (const a of allLinks) {
           const t2 = a.textContent?.trim() || "";
-          if (t2.match(/^\d+\s*(h|hr|m|min|d|w|ชม|นาที|วัน|สัปดาห์)|^(Yesterday|เมื่อวาน)/i)) { timestamp = t2; break; }
+          if (t2.match(/^\d+\s*(h|hr|m|min|d|w|ชม|ชั่วโมง|นาที|วัน|สัปดาห์)|^(Yesterday|เมื่อวาน)|^\d+\s*(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)|^(January|February|March|April|May|June|July|August|September|October|November|December)/i)) {
+            timestamp = t2; break;
+          }
+        }
+        // Fallback: look for aria-label with time info on links
+        if (!timestamp) {
+          for (const a of allLinks) {
+            const label = a.getAttribute("aria-label") || "";
+            if (label.match(/\d{1,2}\s*(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|January|February|March|April|May|June|July|August|September|October|November|December)/i)) {
+              timestamp = label.slice(0, 50); break;
+            }
+          }
         }
         let author = "";
         const strongEl = el.querySelector("strong");
         if (strongEl) author = strongEl.textContent?.trim() || "";
 
-        // Comment count
+        // Comment count — look for specific elements, not full text
         let commentCount = 0;
-        const allText = el.textContent || "";
-        const commentMatch = allText.match(/(\d+)\s*(ความคิดเห็น|comments?)/i);
-        if (commentMatch) commentCount = parseInt(commentMatch[1]);
+        const footerLinks = el.querySelectorAll('a[role="button"], span[role="button"]');
+        for (const fl of footerLinks) {
+          const ft = fl.textContent?.trim() || "";
+          // Match "25 ความคิดเห็น" or "3 comments"
+          const cm = ft.match(/^(\d+)\s*(ความคิดเห็น|comments?)/i);
+          if (cm) { commentCount = parseInt(cm[1]); break; }
+        }
 
-        // Reaction count
+        // Reaction count — look for the reaction bar specifically
         let reactionCount = "";
-        const reactionEl = el.querySelector('[aria-label*="reaction"], [aria-label*="ถูกใจ"], [aria-label*="like"]');
-        if (reactionEl) reactionCount = reactionEl.textContent?.trim() || "";
+        const reactionBtns = el.querySelectorAll('[aria-label]');
+        for (const rb of reactionBtns) {
+          const label = rb.getAttribute("aria-label") || "";
+          // Match "15 คน ถูกใจ" or "15 people reacted"
+          const rm = label.match(/(\d+[\d,.]*).*?(ถูกใจ|react|like)/i);
+          if (rm) { reactionCount = rm[1]; break; }
+        }
         if (!reactionCount) {
-          const rcMatch = allText.match(/(\d+[\d,.]*)\s*(ถูกใจ|likes?)/i);
-          if (rcMatch) reactionCount = rcMatch[1];
+          for (const fl of footerLinks) {
+            const ft = fl.textContent?.trim() || "";
+            if (/^\d+$/.test(ft) && parseInt(ft) < 100000) { reactionCount = ft; break; }
+          }
         }
 
         // Media type
@@ -324,6 +417,9 @@ export async function sendComment(postUrl: string, commentText: string): Promise
   const page = await ctx.newPage();
   const stopCapture = await startScreencast(page);
   try {
+    // Ensure page profile before commenting
+    await ensurePageProfile(page);
+
     emitAction(`Preparing to comment on post...`);
     await page.waitForTimeout(1000 + Math.random() * 2000);
     await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });

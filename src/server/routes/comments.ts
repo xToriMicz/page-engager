@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, schema } from "../db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { scanTargetPosts, sendComment, getCurrentPage } from "../browser";
 import { generateComment, analyzePost } from "../ai/generate-comment";
 import { notifyActivity } from "./activity";
@@ -18,6 +18,25 @@ app.get("/", async (c) => {
   return c.json(all);
 });
 
+// Get last scan results (persisted)
+app.get("/scan/:targetId", async (c) => {
+  const targetId = Number(c.req.param("targetId"));
+  const cached = await db.select().from(schema.scanCache)
+    .where(eq(schema.scanCache.targetId, targetId))
+    .orderBy(desc(schema.scanCache.scannedAt))
+    .limit(1)
+    .get();
+
+  if (!cached) return c.json({ posts: [], scannedAt: null });
+
+  const target = await db.select().from(schema.targets).where(eq(schema.targets.id, targetId)).get();
+  return c.json({
+    target: target?.name || "",
+    posts: JSON.parse(cached.posts),
+    scannedAt: cached.scannedAt,
+  });
+});
+
 // Scan posts of a target
 app.post("/scan/:targetId", async (c) => {
   const targetId = Number(c.req.param("targetId"));
@@ -32,6 +51,13 @@ app.post("/scan/:targetId", async (c) => {
 
   try {
     const posts = await scanTargetPosts(target.url);
+
+    // Save to scanCache for persistence
+    await db.insert(schema.scanCache).values({
+      targetId,
+      posts: JSON.stringify(posts),
+    });
+
     return c.json({ target: target.name, posts });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

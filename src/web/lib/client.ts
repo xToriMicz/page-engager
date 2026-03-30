@@ -40,6 +40,8 @@ export const generateComment = (postText: string) =>
 export const getComments = () => request<Comment[]>("/comments");
 export const scanPosts = (targetId: number) =>
   request<ScanResult>(`/comments/scan/${targetId}`, { method: "POST" });
+export const getLastScan = (targetId: number) =>
+  request<ScanResult & { scannedAt: string | null }>(`/comments/scan/${targetId}`);
 export const sendComment = (data: {
   targetId: number;
   postUrl: string;

@@ -1,4 +1,4 @@
-import { connectToChrome, switchProfileOnPage, getCurrentPage } from "./index";
+import { connectToChrome, ensurePageProfile } from "./index";
 import { emitAction, emitStatus, emitDone, emitError, setPreviewActive, startScreencast } from "./preview";
 
 export interface DiscoveredProfile {
@@ -24,42 +24,13 @@ export async function discoverEngagers(myPageUrl: string, postsToScan = 5): Prom
   const stopCapture = await startScreencast(page);
 
   try {
-    // Go to page first, then check if we need to switch
+    // Ensure page profile before discovering
+    emitAction("Checking profile...");
+    await ensurePageProfile(page);
+
     emitAction(`Opening page: ${myPageUrl}`);
     await page.goto(myPageUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
-
-    // Check if already browsing as the page (look at comment box identity)
-    const currentPage = getCurrentPage();
-    const alreadySwitched = await page.evaluate((pageName: string) => {
-      // Check comment box: "แสดงความคิดเห็นในฐานะ X"
-      const commentBoxes = document.querySelectorAll('[aria-label*="แสดงความคิดเห็น"], [aria-label*="Write a comment"], [aria-label*="Comment as"]');
-      for (const box of commentBoxes) {
-        const label = box.getAttribute("aria-label") || "";
-        if (label.includes(pageName)) return true;
-      }
-      // Check profile avatar alt text
-      const imgs = document.querySelectorAll('[aria-label="โปรไฟล์ของคุณ"] img, [aria-label="Your profile"] img');
-      for (const img of imgs) {
-        if (img.getAttribute("alt")?.includes(pageName)) return true;
-      }
-      return false;
-    }, currentPage || "");
-
-    if (alreadySwitched) {
-      emitAction(`Already browsing as ${currentPage}`);
-    } else if (currentPage) {
-      emitAction(`Switching to page: ${currentPage}`);
-      try {
-        await switchProfileOnPage(page, currentPage);
-        emitAction(`Switched to ${currentPage}`);
-        // Re-navigate to page after switch
-        await page.goto(myPageUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-        await page.waitForTimeout(3000);
-      } catch (e: any) {
-        emitError(`Could not switch: ${e.message}`);
-      }
-    }
 
     // Scroll to load posts
     emitAction("Scrolling to load posts...");

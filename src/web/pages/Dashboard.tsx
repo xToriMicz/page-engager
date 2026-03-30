@@ -26,8 +26,9 @@ export function Dashboard({ currentPage }: Props) {
   const [targets, setTargets] = useState<Target[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
+  const [selectedTargets, setSelectedTargets] = useState<Set<number>>(new Set());
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState("");
   const [commentTexts, setCommentTexts] = useState<Record<number, string>>({});
   const [analyses, setAnalyses] = useState<Record<number, PostAnalysis>>({});
   const [generating, setGenerating] = useState<number | null>(null);
@@ -39,38 +40,87 @@ export function Dashboard({ currentPage }: Props) {
     api.getComments().then(setComments);
   }, []);
 
+  // Load last scan cache on mount
+  useEffect(() => {
+    if (targets.length === 0) return;
+    // Load cached scans for all targets
+    const loadCache = async () => {
+      const allPosts: any[] = [];
+      for (const t of targets) {
+        try {
+          const result = await api.getLastScan(t.id);
+          if (result.posts?.length > 0) {
+            allPosts.push(...result.posts.map((p: any) => ({ ...p, targetName: t.name, targetId: t.id })));
+          }
+        } catch {}
+      }
+      if (allPosts.length > 0) {
+        setPosts(allPosts);
+      }
+    };
+    loadCache();
+  }, [targets]);
+
   const noPage = !currentPage;
 
+  const toggleTarget = (id: number) => {
+    setSelectedTargets((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedTargets.size === targets.length) {
+      setSelectedTargets(new Set());
+    } else {
+      setSelectedTargets(new Set(targets.map((t) => t.id)));
+    }
+  };
+
   const handleScan = async () => {
-    if (!selectedTarget) return;
+    const ids = selectedTargets.size > 0 ? Array.from(selectedTargets) : targets.map((t) => t.id);
+    if (ids.length === 0) return;
     setScanning(true);
     setPosts([]);
     setAnalyses({});
     setCommentTexts({});
-    try {
-      const result = await api.scanPosts(selectedTarget);
-      setPosts(result.posts);
 
-      // Auto-generate AI comments + analyze all posts in parallel
-      for (let i = 0; i < result.posts.length; i++) {
-        const post = result.posts[i];
-        if (post.text) {
-          setGenerating(i);
-          try {
-            const [ai, analysis] = await Promise.all([
-              api.generateComment(post.text),
-              api.analyzePost(post.text),
-            ]);
-            setCommentTexts((prev) => ({ ...prev, [i]: ai.comment }));
-            setAnalyses((prev) => ({ ...prev, [i]: analysis }));
-          } catch {}
-        }
+    const allPosts: any[] = [];
+    for (let ti = 0; ti < ids.length; ti++) {
+      const t = targets.find((x) => x.id === ids[ti]);
+      if (!t) continue;
+      setScanProgress(`Scanning ${ti + 1}/${ids.length}: ${t.name}`);
+      try {
+        const result = await api.scanPosts(t.id);
+        const tagged = result.posts.map((p: any) => ({ ...p, targetName: t.name, targetId: t.id }));
+        allPosts.push(...tagged);
+        setPosts([...allPosts]);
+      } catch (e: any) {
+        console.error(`Scan failed for ${t.name}:`, e);
       }
-      setGenerating(null);
-      toast(`Found ${result.posts.length} posts — AI analyzed & generated comments`, "success");
-    } catch (e: any) {
-      toast(e.message, "error");
     }
+
+    // AI analyze + generate comments for all posts
+    setScanProgress("AI analyzing posts...");
+    for (let i = 0; i < allPosts.length; i++) {
+      const post = allPosts[i];
+      if (post.text) {
+        setGenerating(i);
+        try {
+          const [ai, analysis] = await Promise.all([
+            api.generateComment(post.text),
+            api.analyzePost(post.text),
+          ]);
+          setCommentTexts((prev) => ({ ...prev, [i]: ai.comment }));
+          setAnalyses((prev) => ({ ...prev, [i]: analysis }));
+        } catch {}
+      }
+    }
+    setGenerating(null);
+    setScanProgress("");
+    toast(`Scanned ${ids.length} targets — ${allPosts.length} posts found`, "success");
     setScanning(false);
   };
 
@@ -91,7 +141,7 @@ export function Dashboard({ currentPage }: Props) {
     setSending(i);
     try {
       const result = await api.sendComment({
-        targetId: selectedTarget!,
+        targetId: post.targetId,
         postUrl: post.url,
         postText: post.text,
         commentText: text,
@@ -142,19 +192,34 @@ export function Dashboard({ currentPage }: Props) {
       {/* Scan */}
       <Card>
         <CardTitle>Scan & Engage</CardTitle>
-        <div className="flex flex-col sm:flex-row gap-2 mt-3">
-          <Select
-            value={selectedTarget ?? ""}
-            onChange={(e) => setSelectedTarget(Number(e.target.value) || null)}
-            className="flex-1"
-          >
-            <option value="">Select target page</option>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </Select>
-          <Button onClick={handleScan} disabled={!selectedTarget || scanning || noPage}>
-            {scanning ? "Scanning..." : "Scan & Generate"}
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={selectAll} className="text-xs text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
+              {selectedTargets.size === targets.length ? "Deselect All" : "Select All"}
+            </button>
+            <span className="text-xs text-subtle">{selectedTargets.size}/{targets.length} selected</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {targets.map((t: any) => {
+              const selected = selectedTargets.has(t.id);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => toggleTarget(t.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs border cursor-pointer transition-all ${
+                    selected
+                      ? "bg-primary/20 border-primary text-primary font-medium"
+                      : "bg-surface border-ring text-muted hover:border-primary/50"
+                  }`}
+                >
+                  {t.name}
+                  {t.interactionCount > 0 && <span className="ml-1 opacity-60">{t.interactionCount}x</span>}
+                </button>
+              );
+            })}
+          </div>
+          <Button onClick={handleScan} disabled={scanning || noPage} className="w-full">
+            {scanning ? scanProgress || "Scanning..." : `Scan ${selectedTargets.size > 0 ? selectedTargets.size : "All"} Targets`}
           </Button>
         </div>
         <p className="text-xs text-subtle mt-2">AI will auto-classify, rate, and generate comments for each post</p>
@@ -174,7 +239,8 @@ export function Dashboard({ currentPage }: Props) {
                 {/* Post header with metadata */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {post.author && <span className="text-xs font-medium text-foreground">{post.author}</span>}
+                    {post.targetName && <span className="text-xs font-semibold text-primary">{post.targetName}</span>}
+                    {post.author && post.author !== post.targetName && <span className="text-xs font-medium text-foreground">{post.author}</span>}
                     {post.timestamp && <span className="text-xs text-subtle">{post.timestamp}</span>}
                     {/* Media type */}
                     {post.hasVideo && <Badge variant="primary">Video</Badge>}
