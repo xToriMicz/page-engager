@@ -424,30 +424,85 @@ export async function sendComment(postUrl: string, commentText: string): Promise
     await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 
-    // Open comment box
+    // Scroll down to make comment area visible
     emitAction("Opening comment box...");
-    const commentBtn = page.locator('[aria-label="แสดงความคิดเห็น"], [aria-label="Comment"], [aria-label="Write a comment"]').first();
-    if (await commentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await page.evaluate(() => window.scrollBy(0, 300));
+    await page.waitForTimeout(1000);
+
+    // Click "Comment" / "แสดงความคิดเห็น" button to open comment box
+    const commentBtn = page.locator('[aria-label*="แสดงความคิดเห็น"], [aria-label*="Comment"], [aria-label*="comment"], [aria-label*="Write a comment"], [aria-label*="Write a public comment"]').first();
+    if (await commentBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await commentBtn.click();
       await page.waitForTimeout(2000);
     }
 
-    // Find textbox
-    const commentBox = page.locator('[contenteditable="true"][role="textbox"], [aria-label="Write a comment"], [aria-label="เขียนความคิดเห็น"]').first();
-    await commentBox.click({ timeout: 10000 });
-    await page.waitForTimeout(500);
+    // Find comment textbox — Facebook uses multiple formats
+    emitAction("Finding comment input...");
+    const commentBox = page.locator([
+      '[contenteditable="true"][role="textbox"]',
+      '[data-lexical-editor="true"]',
+      '[aria-label*="เขียนความคิดเห็น"]',
+      '[aria-label*="Write a comment"]',
+      '[aria-label*="Write a public comment"]',
+      '[aria-label*="แสดงความคิดเห็นในฐานะ"]',
+      '[placeholder*="เขียนความคิดเห็น"]',
+      '[placeholder*="Write a comment"]',
+    ].join(", ")).first();
 
-    // Type
-    emitAction(`Typing comment: "${commentText.slice(0, 50)}..."`);
-    for (const char of commentText) {
-      await page.keyboard.type(char, { delay: 30 + Math.random() * 70 });
+    try {
+      await commentBox.click({ timeout: 10000 });
+    } catch {
+      // Fallback: try clicking any contenteditable near comment area
+      emitAction("Trying fallback comment input...");
+      const fallback = page.locator('[contenteditable="true"]').last();
+      await fallback.click({ timeout: 5000 });
+    }
+    await page.waitForTimeout(1000);
+
+    // Type comment — use keyboard.insertText for Thai text (more reliable than type)
+    emitAction(`Typing: "${commentText.slice(0, 40)}..."`);
+    await page.keyboard.insertText(commentText);
+    await page.waitForTimeout(1000);
+
+    // Verify text was entered
+    const typed = await page.evaluate(() => {
+      const editors = document.querySelectorAll('[contenteditable="true"][role="textbox"], [data-lexical-editor="true"]');
+      for (const ed of editors) {
+        const text = ed.textContent?.trim();
+        if (text && text.length > 2) return text;
+      }
+      return "";
+    });
+
+    if (!typed) {
+      emitError("Comment text not entered — retrying with keyboard.type");
+      // Retry with character-by-character typing
+      for (const char of commentText) {
+        await page.keyboard.type(char, { delay: 50 + Math.random() * 50 });
+      }
+      await page.waitForTimeout(500);
     }
 
-    // Send
+    // Send with Enter
     emitAction("Sending comment...");
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(500 + Math.random() * 1000);
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(4000);
+
+    // Verify comment was posted (check if textbox is empty = sent)
+    const afterText = await page.evaluate(() => {
+      const editors = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
+      for (const ed of editors) {
+        const text = ed.textContent?.trim();
+        if (text && text.length > 2) return text;
+      }
+      return "";
+    });
+    if (afterText) {
+      emitAction("Comment might still be in box — trying Ctrl+Enter");
+      await page.keyboard.press("Control+Enter");
+      await page.waitForTimeout(3000);
+    }
 
     lastCommentTime = Date.now();
     emitDone("Comment sent successfully");
