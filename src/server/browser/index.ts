@@ -308,11 +308,22 @@ export async function sendComment(
       }
     }
 
-    // Step 2: Click comment box
+    // Step 2: Open comment box (Reels have a button, regular posts have textbox)
+    // Try clicking "Comment" button first (Reels)
+    const commentBtn = page.locator(
+      '[aria-label="แสดงความคิดเห็น"], [aria-label="Comment"], [aria-label="Write a comment"]'
+    ).first();
+    const hasBtnVisible = await commentBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasBtnVisible) {
+      await commentBtn.click();
+      await page.waitForTimeout(2000);
+    }
+
+    // Now find the actual textbox
     const commentBox = page.locator(
-      '[aria-label="Write a comment"], [aria-label="เขียนความคิดเห็น"], [contenteditable="true"][role="textbox"]'
-    );
-    await commentBox.first().click();
+      '[contenteditable="true"][role="textbox"], [aria-label="Write a comment"], [aria-label="เขียนความคิดเห็น"], [aria-placeholder*="comment"], [aria-placeholder*="ความคิดเห็น"]'
+    ).first();
+    await commentBox.click({ timeout: 10000 });
     await page.waitForTimeout(500);
 
     // Step 3: Type comment (human-like speed)
