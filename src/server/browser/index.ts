@@ -109,43 +109,44 @@ export async function listManagedPages(): Promise<ManagedPage[]> {
 }
 
 export async function switchToPage(pageName: string): Promise<{ success: boolean; error?: string }> {
-  // Find page URL from managed pages list
-  const managedPages = await listManagedPages();
-  const targetPage = managedPages.find((p) => p.name === pageName);
-  if (!targetPage) {
-    return { success: false, error: `Page "${pageName}" not found` };
-  }
-
   const ctx = await connectToChrome();
   const page = await ctx.newPage();
 
   try {
-    // Go directly to the page
-    await page.goto(targetPage.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    // Go to Facebook home
+    await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 
-    // Try clicking "Switch Now" / "สลับไปใช้" button
-    const switchBtn = page.locator(
-      'text=/Switch Now|Switch to|สลับไปใช้|สลับ|Use Facebook as/i'
-    ).first();
-    const hasSwitchBtn = await switchBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    // Step 1: Click profile avatar (top right)
+    await page.locator('[aria-label="โปรไฟล์ของคุณ"], [aria-label="Your profile"]').first().click({ timeout: 5000 });
+    await page.waitForTimeout(2000);
 
-    if (hasSwitchBtn) {
-      await switchBtn.click();
-      await page.waitForTimeout(3000);
-    } else {
-      // Alternative: click profile/page avatar at top, then switch
-      // Go to page settings to trigger switch
-      await page.goto(`${targetPage.url}?sk=manage`, { waitUntil: "domcontentloaded", timeout: 30000 });
+    // Step 2: Look for "ดูโปรไฟล์ทั้งหมด" / "See all profiles" and click it
+    const seeAll = page.locator('text=/ดูโปรไฟล์ทั้งหมด|See all profiles/i').first();
+    const hasSeeAll = await seeAll.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasSeeAll) {
+      await seeAll.click();
       await page.waitForTimeout(2000);
     }
 
-    // Verify we switched — check if page name appears as active identity
-    const pageTitle = await page.title();
-    if (pageTitle.includes(pageName) || pageTitle.includes("Facebook")) {
-      currentPageName = pageName;
-      return { success: true };
+    // Step 3: Click the target page name in the profile switcher section
+    // The page names appear as visible, clickable spans BELOW "ดูโปรไฟล์ทั้งหมด"
+    // Use force:true since FB hides elements weirdly
+    const pageOptions = page.locator(`span:text-is("${pageName}")`);
+    const count = await pageOptions.count();
+    console.log(`Found ${count} elements matching "${pageName}"`);
+
+    // Click the LAST match — the one in the profile switcher section (not notifications)
+    if (count > 0) {
+      await pageOptions.last().click({ force: true, timeout: 5000 });
+    } else {
+      throw new Error(`Page "${pageName}" not found in profile menu`);
     }
+    await page.waitForTimeout(4000);
+
+    // Verify: check if the textbox now says "commenting as [pageName]"
+    const title = await page.title();
+    console.log(`Switched to ${pageName}, page title: ${title}`);
 
     currentPageName = pageName;
     return { success: true };
