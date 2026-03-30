@@ -3,15 +3,52 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "npx concurrently \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npx tsx watch src/server/index.ts",
     "dev:web": "vite",
     "start": "HEADLESS=true npx tsx src/server/index.ts",
     "build": "vite build",
+    "electron": "electron .",
+    "electron:dev": "npx concurrently \"npm:dev:server\" \"npm:dev:web\" \"sleep 5 && electron .\"",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
+  },
+  "build": {
+    "appId": "com.page-engager.app",
+    "productName": "Page Engager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "src/server/**/*",
+      "drizzle/**/*",
+      "node_modules/**/*",
+      "package.json",
+      ".env.example"
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "electron/icon.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "electron/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    },
+    "extraResources": [
+      { "from": "data", "to": "data", "filter": ["**/*"] }
+    ]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -38,6 +75,8 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "drizzle-kit": "^0.30.0",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.7.0",
     "vite": "^6.1.0"
   }

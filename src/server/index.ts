@@ -13,7 +13,7 @@ import auto from "./routes/auto";
 const app = new Hono();
 
 app.use("*", logger());
-app.use("*", cors({ origin: "http://localhost:5173" }));
+app.use("*", cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
 
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
@@ -26,6 +26,24 @@ app.route("/api/sessions", sessions);
 app.route("/api/activity", activity);
 app.route("/api/preview", preview);
 app.route("/api/auto", auto);
+
+// Serve built frontend in production
+import { serveStatic } from "@hono/node-server/serve-static";
+import { existsSync } from "fs";
+import { join } from "path";
+
+const distPath = join(import.meta.dirname || ".", "..", "..", "dist", "web");
+if (existsSync(distPath)) {
+  app.use("/*", serveStatic({ root: distPath }));
+  // SPA fallback
+  app.get("*", (c) => {
+    const indexPath = join(distPath, "index.html");
+    if (existsSync(indexPath)) {
+      return c.html(require("fs").readFileSync(indexPath, "utf-8"));
+    }
+    return c.notFound();
+  });
+}
 
 import { seedTemplates } from "./db/seed";
 seedTemplates();
