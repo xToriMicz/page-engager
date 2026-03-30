@@ -79,7 +79,7 @@ export async function scanTargetPosts(
   const page = await ctx.newPage();
 
   try {
-    await page.goto(targetUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     for (let i = 0; i < 3; i++) {
@@ -181,7 +181,7 @@ export async function sendComment(
 
   try {
     await page.waitForTimeout(1000 + Math.random() * 2000);
-    await page.goto(postUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
 
     const commentBox = page.locator(
@@ -214,7 +214,7 @@ export async function fetchPageName(url: string): Promise<string> {
   const page = await ctx.newPage();
 
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 
     const h1 = await page.locator("h1").first().textContent({ timeout: 5000 }).catch(() => null);
