@@ -72,6 +72,14 @@ export function Targets() {
     toast("Removed", "info");
   };
 
+  const handleDeleteAll = async () => {
+    if (targets.length === 0) return;
+    await api.deleteAllTargets();
+    load();
+    setEngagers([]);
+    toast("All targets removed", "info");
+  };
+
   const existingUrls = new Set(targets.map((t) => t.url));
 
   return (
@@ -147,7 +155,14 @@ export function Targets() {
 
       {/* Current targets */}
       <Card>
-        <CardTitle>Targets ({targets.length})</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Targets ({targets.length})</CardTitle>
+          {targets.length > 0 && (
+            <Button variant="danger" size="xs" onClick={handleDeleteAll}>
+              Remove All
+            </Button>
+          )}
+        </div>
         {targets.length === 0 ? (
           <p className="text-sm text-subtle mt-3">No targets — discover or add manually</p>
         ) : (

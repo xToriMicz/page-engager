@@ -133,11 +133,24 @@ app.put("/:id", async (c) => {
   return c.json(result[0]);
 });
 
+// Delete all targets
+app.delete("/", async (c) => {
+  try {
+    await db.delete(schema.comments);
+    await db.delete(schema.scanCache);
+    await db.delete(schema.targets);
+    return c.json({ ok: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // Delete target (and its comments)
 app.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
     await db.delete(schema.comments).where(eq(schema.comments.targetId, id));
+    await db.delete(schema.scanCache).where(eq(schema.scanCache.targetId, id));
     await db.delete(schema.targets).where(eq(schema.targets.id, id));
     return c.json({ ok: true });
   } catch (e: any) {

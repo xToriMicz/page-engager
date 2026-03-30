@@ -26,6 +26,8 @@ export const discoverEngagers = (pageUrl: string) =>
   );
 export const deleteTarget = (id: number) =>
   request<{ success: boolean }>(`/targets/${id}`, { method: "DELETE" });
+export const deleteAllTargets = () =>
+  request<{ ok: boolean }>("/targets", { method: "DELETE" });
 
 // Templates
 export const getTemplates = () => request<Template[]>("/templates");
