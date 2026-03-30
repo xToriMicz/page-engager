@@ -12,6 +12,19 @@ const app = new Hono();
 let autoRunning = false;
 let autoAbort = false;
 
+// Normalize Facebook URL to prevent duplicate comments on same post
+function normalizePostUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    // Remove tracking params, keep only essential path
+    u.search = "";
+    u.hash = "";
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return url.split("?")[0].replace(/\/$/, "");
+  }
+}
+
 // Get auto config
 app.get("/config", (c) => {
   const maxPostsPerTarget = +(getSetting("auto_maxPosts") || "3");
@@ -42,10 +55,11 @@ app.post("/stop", (c) => {
 
 // Run 1 round of auto-engage
 app.post("/run", async (c) => {
-  if (autoRunning) return c.json({ error: "Already running" }, 400);
+  if (autoRunning) return c.json({ error: "Already running — stop first" }, 409);
 
   autoRunning = true;
   autoAbort = false;
+  const autoTimeout = setTimeout(() => { autoAbort = true; }, 30 * 60 * 1000); // 30min max
   setPreviewActive(true);
 
   const maxPostsPerTarget = +(getSetting("auto_maxPosts") || "3");
@@ -65,7 +79,7 @@ app.post("/run", async (c) => {
       .from(schema.comments)
       .where(eq(schema.comments.status, "sent"))
       .all();
-    const commentedUrls = new Set(previousComments.map((c) => c.postUrl));
+    const commentedUrls = new Set(previousComments.map((c) => normalizePostUrl(c.postUrl)));
 
     emitStatus(`Auto-engage: ${targets.length} targets, max ${maxPostsPerTarget} posts each`);
 
@@ -99,8 +113,8 @@ app.post("/run", async (c) => {
         continue;
       }
 
-      // Filter: remove already commented posts
-      const newPosts = posts.filter((p) => p.url && !commentedUrls.has(p.url));
+      // Filter: remove already commented posts (normalized URL match)
+      const newPosts = posts.filter((p) => p.url && !commentedUrls.has(normalizePostUrl(p.url)));
       const toComment = newPosts.slice(0, maxPostsPerTarget);
 
       emitAction(`${target.name}: ${posts.length} posts found, ${newPosts.length} new, commenting on ${toComment.length}`);
@@ -131,15 +145,20 @@ app.post("/run", async (c) => {
           }
         }
 
-        if (!commentText.trim()) {
+        // Validate comment: 3-500 chars, no scripts
+        commentText = commentText.trim();
+        if (commentText.length < 3 || commentText.length > 500) {
           totalSkipped++;
           continue;
         }
+        commentText = commentText.replace(/<[^>]*>/g, ""); // strip HTML tags
+
+        const normalizedUrl = normalizePostUrl(post.url);
 
         // Save to DB as pending
         const [record] = await db.insert(schema.comments).values({
           targetId: target.id,
-          postUrl: post.url,
+          postUrl: normalizedUrl,
           postText: post.text,
           commentText,
           status: "pending",
@@ -155,7 +174,7 @@ app.post("/run", async (c) => {
               status: "sent",
               sentAt: new Date().toISOString(),
             }).where(eq(schema.comments.id, record.id));
-            commentedUrls.add(post.url); // prevent re-commenting in same run
+            commentedUrls.add(normalizedUrl); // prevent re-commenting in same run
             totalSent++;
             emitAction(`Sent to ${target.name}: "${commentText.slice(0, 40)}..."`);
             notifyActivity("auto_comment_sent", { target: target.name, postUrl: post.url });
@@ -188,6 +207,7 @@ app.post("/run", async (c) => {
     emitError(`Auto-engage error: ${e.message}`);
     return c.json({ error: e.message }, 500);
   } finally {
+    clearTimeout(autoTimeout);
     autoRunning = false;
     autoAbort = false;
     setPreviewActive(false);

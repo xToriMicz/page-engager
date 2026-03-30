@@ -155,6 +155,13 @@ app.post("/send", async (c) => {
     return c.json({ error: "postUrl and commentText required" }, 400);
   }
 
+  // Validate comment text
+  const commentText = body.commentText.trim().replace(/<[^>]*>/g, "");
+  if (commentText.length < 3 || commentText.length > 500) {
+    return c.json({ error: "Comment must be 3-500 characters" }, 400);
+  }
+  body.commentText = commentText;
+
   // Record comment as pending
   const [comment] = await db
     .insert(schema.comments)

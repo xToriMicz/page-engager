@@ -78,7 +78,10 @@ export async function startScreencast(page: Page): Promise<() => void> {
           });
           const buf = Buffer.from(data, "base64");
           emit({ type: "frame", data: buf, timestamp: "" });
-        } catch {}
+        } catch (e: any) {
+          // Page navigating or closed — expected during automation
+          if (!e.message?.includes("Target closed")) console.log(`[preview] capture error: ${e.message}`);
+        }
         const elapsed = performance.now() - t0;
         const wait = Math.max(1, FRAME_MS - elapsed);
         await new Promise((r) => setTimeout(r, wait));
