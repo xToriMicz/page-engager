@@ -9,6 +9,10 @@
     "dev:server": "npx tsx watch src/server/index.ts",
     "dev:web": "vite",
     "start": "HEADLESS=true npx tsx src/server/index.ts",
+    "start:24h": "npx pm2 start ecosystem.config.cjs",
+    "stop": "npx pm2 stop page-engager",
+    "logs": "npx pm2 logs page-engager",
+    "status": "npx pm2 status",
     "build": "vite build",
     "electron": "electron .",
     "electron:dev": "npx concurrently \"npm:dev:server\" \"npm:dev:web\" \"sleep 5 && electron .\"",
@@ -48,7 +52,13 @@
     },
     "npmRebuild": false,
     "extraResources": [
-      { "from": "data", "to": "data", "filter": ["**/*"] }
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      }
     ]
   },
   "dependencies": {
@@ -62,6 +72,7 @@
     "drizzle-orm": "^0.39.0",
     "hono": "^4.7.0",
     "playwright": "^1.50.0",
+    "pm2": "^6.0.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
