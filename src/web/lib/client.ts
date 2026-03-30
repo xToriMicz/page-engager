@@ -78,6 +78,9 @@ export const getStats = () => request<{ totalSent: number; todaySent: number; to
 // Chrome connection & pages
 export const getChromeStatus = () =>
   request<ChromeStatus>("/sessions/status");
+export const getProfiles = () => request<{ profiles: { name: string; hasCookies: boolean }[]; currentProfile: string; os: string }>("/sessions/profiles");
+export const setProfile = (profile: string) =>
+  request<{ ok: boolean }>("/sessions/set-profile", { method: "POST", body: JSON.stringify({ profile }) });
 export const getHeadless = () => request<{ headless: boolean }>("/sessions/headless");
 export const setHeadless = (headless: boolean) =>
   request<{ headless: boolean; message: string }>("/sessions/headless", { method: "POST", body: JSON.stringify({ headless }) });

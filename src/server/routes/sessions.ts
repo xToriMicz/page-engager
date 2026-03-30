@@ -70,6 +70,15 @@ app.get("/screenshot", async (c) => {
   }
 });
 
+// Set Chrome profile
+app.post("/set-profile", async (c) => {
+  const { profile } = await c.req.json();
+  if (!profile) return c.json({ error: "profile required" }, 400);
+  process.env.CHROME_PROFILE = profile;
+  await closeBrowser(); // restart browser with new profile
+  return c.json({ ok: true, profile });
+});
+
 // Toggle headless mode
 app.get("/headless", (c) => {
   return c.json({ headless: isHeadless() });

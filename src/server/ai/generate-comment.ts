@@ -3,15 +3,19 @@ import Anthropic from "@anthropic-ai/sdk";
 const client = new Anthropic();
 
 export async function generateComment(postText: string, pageName: string): Promise<string> {
+  // Sanitize inputs to prevent prompt injection
+  const safePage = pageName.slice(0, 50).replace(/"/g, "'");
+  const safeText = postText.slice(0, 500).replace(/"/g, "'");
+
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 150,
     messages: [
       {
         role: "user",
-        content: `คุณคือเพจ "${pageName}" บน Facebook กำลังจะ comment โพสต์นี้เพื่อ engagement
+        content: `คุณคือเพจ "${safePage}" บน Facebook กำลังจะ comment โพสต์นี้เพื่อ engagement
 
-โพสต์: "${postText}"
+โพสต์: "${safeText}"
 
 เขียน comment สั้นๆ เป็นภาษาไทย 1-2 ประโยค ที่:
 - เป็นธรรมชาติ ไม่เหมือน bot
@@ -38,6 +42,7 @@ export interface PostAnalysis {
 }
 
 export async function analyzePost(postText: string): Promise<PostAnalysis> {
+  const safeText = postText.slice(0, 300).replace(/"/g, "'");
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 100,
@@ -45,7 +50,7 @@ export async function analyzePost(postText: string): Promise<PostAnalysis> {
       {
         role: "user",
         content: `วิเคราะห์โพสต์ Facebook นี้:
-"${postText.slice(0, 300)}"
+"${safeText}"
 
 ตอบเป็น JSON เท่านั้น:
 {"type":"greeting|normal|sale|review|news|share","rating":1-5,"summary":"สรุป 5 คำ"}

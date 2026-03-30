@@ -17,6 +17,8 @@ export function Settings({ onPageChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const [headless, setHeadless] = useState(true);
+  const [profiles, setProfiles] = useState<{ name: string; hasCookies: boolean }[]>([]);
+  const [currentProfile, setCurrentProfile] = useState("");
   const { toast } = useToast();
 
   const loadStatus = () => api.getChromeStatus().then(setStatus).catch(() => setStatus(null));
@@ -43,6 +45,10 @@ export function Settings({ onPageChange }: Props) {
   useEffect(() => {
     loadStatus(); loadPages();
     api.getHeadless().then((r) => setHeadless(r.headless)).catch(() => {});
+    api.getProfiles().then((r) => {
+      setProfiles(r.profiles);
+      setCurrentProfile(r.currentProfile);
+    }).catch(() => {});
   }, []);
 
   const handleSwitch = async (pageName: string) => {
@@ -64,6 +70,41 @@ export function Settings({ onPageChange }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Chrome Profile */}
+      {profiles.length > 0 && (
+        <Card>
+          <CardTitle>Chrome Profile</CardTitle>
+          <p className="text-xs text-subtle mt-1 mb-3">
+            Select the Chrome profile that is logged into Facebook
+          </p>
+          <div className="space-y-1">
+            {profiles.filter((p) => p.hasCookies).map((p) => {
+              const isActive = p.name === currentProfile;
+              return (
+                <button
+                  key={p.name}
+                  onClick={async () => {
+                    setCurrentProfile(p.name);
+                    await api.setProfile(p.name);
+                    toast(`Switched to ${p.name} — restart browser`, "success");
+                    loadStatus();
+                    loadPages();
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-[var(--radius-md)] border cursor-pointer text-left text-sm transition-all ${
+                    isActive
+                      ? "bg-primary/10 border-primary text-primary font-medium"
+                      : "bg-transparent border-ring text-muted hover:border-primary/50"
+                  }`}
+                >
+                  <span>{p.name}</span>
+                  {isActive && <Badge variant="success">Active</Badge>}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Pages */}
       <Card>
         <div className="flex items-center justify-between">

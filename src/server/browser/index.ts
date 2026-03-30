@@ -252,7 +252,7 @@ export async function switchProfileOnPage(page: import("playwright").Page, pageN
     setCurrentPage(pageName);
   } else {
     console.log(`[switch] Warning: could not find clickable element for ${pageName}`);
-    setCurrentPage(pageName);
+    // Don't set as current if switch failed
   }
 }
 
