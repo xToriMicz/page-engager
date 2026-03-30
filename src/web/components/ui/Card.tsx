@@ -1,14 +1,30 @@
-import { HTMLAttributes } from "react";
+import { HTMLAttributes, forwardRef } from "react";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  title?: string;
+  padding?: "sm" | "md" | "lg";
 }
 
-export function Card({ title, children, className = "", ...props }: CardProps) {
-  return (
-    <div className={`bg-card border border-border rounded-lg p-4 ${className}`} {...props}>
-      {title && <h3 className="mb-3 text-sm font-medium text-gray-400 uppercase tracking-wide">{title}</h3>}
-      {children}
-    </div>
-  );
+const paddings = { sm: "p-3", md: "p-4", lg: "p-5" };
+
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ padding = "md", className = "", ...props }, ref) => (
+    <div
+      ref={ref}
+      data-slot="card"
+      className={`bg-surface border border-ring rounded-[var(--radius-lg)] ${paddings[padding]} ${className}`}
+      {...props}
+    />
+  )
+);
+
+export function CardHeader({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div data-slot="card-header" className={`mb-3 ${className}`} {...props} />;
+}
+
+export function CardTitle({ className = "", ...props }: HTMLAttributes<HTMLHeadingElement>) {
+  return <h3 data-slot="card-title" className={`text-sm font-medium text-muted uppercase tracking-wider ${className}`} {...props} />;
+}
+
+export function CardContent({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div data-slot="card-content" className={className} {...props} />;
 }

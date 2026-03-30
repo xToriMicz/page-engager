@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
-import { Button, Card, Input, Select, Textarea, Badge } from "../components/ui";
+import { Card, CardTitle, Button, Input, Select, Textarea, Badge, useToast } from "../components/ui";
 import type { Template } from "../types";
 
 export function Templates() {
@@ -8,6 +8,7 @@ export function Templates() {
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("general");
+  const { toast } = useToast();
 
   const load = () => api.getTemplates().then(setTemplates);
   useEffect(() => { load(); }, []);
@@ -17,70 +18,51 @@ export function Templates() {
     await api.addTemplate({ name, content, category });
     setName("");
     setContent("");
-    setCategory("general");
     load();
+    toast("Template added", "success");
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this template?")) return;
     await api.deleteTemplate(id);
     load();
+    toast("Template removed", "info");
   };
 
   return (
-    <div>
-      <h1 className="text-lg font-semibold text-white mb-5">Comment Templates</h1>
-
-      <Card title="Add Template" className="mb-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Template name"
-              className="sm:w-52"
-            />
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="sm:w-40">
+    <div className="space-y-4">
+      <Card>
+        <CardTitle>Add template</CardTitle>
+        <div className="space-y-3 mt-3">
+          <div className="flex gap-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name" className="flex-1" />
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-32">
               <option value="general">General</option>
               <option value="greeting">Greeting</option>
               <option value="support">Support</option>
               <option value="promo">Promo</option>
             </Select>
           </div>
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Comment template text..."
-            rows={3}
-          />
-          <Button onClick={handleAdd} className="self-start">
-            Add
-          </Button>
+          <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Comment text..." rows={2} />
+          <Button onClick={handleAdd} disabled={!name || !content} className="w-full sm:w-auto">Add Template</Button>
         </div>
       </Card>
 
-      <Card title={`Templates (${templates.length})`}>
+      <Card>
+        <CardTitle>Templates ({templates.length})</CardTitle>
         {templates.length === 0 ? (
-          <p className="text-sm text-text-muted">No templates yet</p>
+          <p className="text-sm text-subtle mt-3">No templates yet</p>
         ) : (
-          <div className="space-y-0">
+          <div className="mt-3 space-y-0">
             {templates.map((t) => (
-              <div
-                key={t.id}
-                className="flex flex-col sm:flex-row sm:items-start justify-between p-3 border-b border-border gap-2 hover:bg-card-hover transition-colors duration-150"
-              >
-                <div className="flex-1 min-w-0">
+              <div key={t.id} className="flex items-start justify-between py-3 border-b border-ring last:border-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-gray-200">{t.name}</span>
+                    <span className="text-sm font-medium text-foreground">{t.name}</span>
                     <Badge>{t.category}</Badge>
                   </div>
-                  <div className="text-xs text-text-secondary whitespace-pre-wrap break-words">
-                    {t.content}
-                  </div>
+                  <p className="text-sm text-muted whitespace-pre-wrap">{t.content}</p>
                 </div>
-                <Button variant="danger" onClick={() => handleDelete(t.id)} className="shrink-0 self-start">
-                  Remove
-                </Button>
+                <Button variant="danger" size="xs" className="ml-3 shrink-0" onClick={() => handleDelete(t.id)}>Remove</Button>
               </div>
             ))}
           </div>

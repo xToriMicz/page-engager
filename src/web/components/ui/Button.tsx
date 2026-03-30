@@ -1,18 +1,22 @@
-import { ButtonHTMLAttributes } from "react";
+import { ButtonHTMLAttributes, forwardRef } from "react";
 
-type Variant = "primary" | "danger" | "secondary" | "ghost";
-type Size = "sm" | "md";
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "success";
+type Size = "xs" | "sm" | "md" | "lg" | "icon";
 
-const variantClasses: Record<Variant, string> = {
-  primary: "bg-blue-600 hover:bg-blue-500 text-white",
-  danger: "px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20",
-  secondary: "bg-card-hover hover:bg-[#252540] text-text-primary",
-  ghost: "bg-transparent hover:bg-card-hover text-text-primary",
+const variants: Record<Variant, string> = {
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20",
+  secondary: "bg-surface-hover text-foreground hover:bg-overlay",
+  danger: "text-danger hover:bg-danger/10",
+  ghost: "text-muted hover:text-foreground hover:bg-surface-hover",
+  success: "bg-success text-success-foreground hover:bg-success/90 shadow-sm shadow-success/20",
 };
 
-const sizeClasses: Record<Size, string> = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
+const sizes: Record<Size, string> = {
+  xs: "h-7 px-2.5 text-xs gap-1",
+  sm: "h-8 px-3 text-xs gap-1.5",
+  md: "h-9 px-4 text-sm gap-2",
+  lg: "h-10 px-5 text-sm gap-2",
+  icon: "h-9 w-9 p-0 justify-center",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -20,11 +24,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
 }
 
-export function Button({ variant = "primary", size = "md", className = "", ...props }: ButtonProps) {
-  return (
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ variant = "primary", size = "md", className = "", ...props }, ref) => (
     <button
-      className={`rounded-md border-none cursor-pointer transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${variant !== "danger" ? sizeClasses[size] : ""} ${className}`}
+      ref={ref}
+      data-slot="button"
+      className={`inline-flex items-center rounded-[var(--radius-md)] font-medium cursor-pointer border-none transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     />
-  );
-}
+  )
+);

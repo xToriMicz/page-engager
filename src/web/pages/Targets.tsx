@@ -1,85 +1,75 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
-import { Button, Card, Input } from "../components/ui";
+import { Card, CardTitle, Button, Input, Badge, useToast } from "../components/ui";
 import type { Target } from "../types";
 
 export function Targets() {
   const [targets, setTargets] = useState<Target[]>([]);
-  const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [resolving, setResolving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const { toast } = useToast();
 
   const load = () => api.getTargets().then(setTargets);
   useEffect(() => { load(); }, []);
 
-  const handleUrlBlur = async () => {
-    if (!url || name) return;
-    if (!url.includes("facebook.com")) return;
-    setResolving(true);
-    try {
-      const result = await api.resolveTarget(url);
-      if (result.name) setName(result.name);
-    } catch { /* ignore */ }
-    setResolving(false);
-  };
-
   const handleAdd = async () => {
-    if (!url) return;
-    await api.addTarget({ name: name || undefined, url });
-    setName("");
-    setUrl("");
-    load();
+    if (!url.trim()) return;
+    setAdding(true);
+    try {
+      await api.addTarget({ url });
+      setUrl("");
+      load();
+      toast("Target added", "success");
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+    setAdding(false);
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Delete this target?")) return;
     await api.deleteTarget(id);
     load();
+    toast("Target removed", "info");
   };
 
   return (
-    <div>
-      <h1 className="text-lg font-semibold text-white mb-5">Target Pages</h1>
-
-      <Card title="Add Target" className="mb-4">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={resolving ? "Fetching page name..." : "Page name (auto-fill)"}
-            className="sm:w-60"
-          />
+    <div className="space-y-4">
+      <Card>
+        <CardTitle>Add target</CardTitle>
+        <div className="flex gap-2 mt-3">
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            onBlur={handleUrlBlur}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             placeholder="https://facebook.com/pagename"
             className="flex-1"
           />
-          <Button onClick={handleAdd}>Add</Button>
+          <Button onClick={handleAdd} disabled={!url.trim() || adding}>
+            {adding ? "..." : "Add"}
+          </Button>
         </div>
       </Card>
 
-      <Card title={`Targets (${targets.length})`}>
+      <Card>
+        <CardTitle>Targets ({targets.length})</CardTitle>
         {targets.length === 0 ? (
-          <p className="text-sm text-text-muted">No targets yet</p>
+          <p className="text-sm text-subtle mt-3">No targets yet</p>
         ) : (
-          <div className="space-y-0">
+          <div className="mt-3 space-y-0">
             {targets.map((t) => (
-              <div
-                key={t.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border-b border-border gap-2 hover:bg-card-hover transition-colors duration-150"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`w-2 h-2 rounded-full ${t.active ? "bg-green-500" : "bg-text-muted"}`} />
-                    <span className="text-sm font-medium text-gray-200">{t.name}</span>
-                  </div>
-                  <div className="text-xs text-text-secondary font-mono truncate pl-4">{t.url}</div>
+              <div key={t.id} className="flex items-center justify-between py-3 border-b border-ring last:border-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground truncate">{t.name}</div>
+                  <div className="text-xs text-subtle truncate font-mono">{t.url}</div>
                 </div>
-                <Button variant="danger" onClick={() => handleDelete(t.id)}>
-                  Remove
-                </Button>
+                <div className="flex items-center gap-2 ml-3">
+                  <Badge variant={t.active ? "success" : "default"}>
+                    {t.active ? "Active" : "Off"}
+                  </Badge>
+                  <Button variant="danger" size="xs" onClick={() => handleDelete(t.id)}>
+                    Remove
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

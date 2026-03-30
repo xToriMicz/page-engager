@@ -1,133 +1,126 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
-import { Button, Card } from "../components/ui";
-import { useToast } from "../components/ui/Toast";
-import type { ChromeStatus, PageInfo } from "../types";
+import { Card, CardTitle, Button, Badge, Skeleton, useToast } from "../components/ui";
 
-interface SettingsProps {
-  onPageChange: (pageName: string) => void;
+interface Props {
+  onPageChange: (name: string | null) => void;
 }
 
-export function Settings({ onPageChange }: SettingsProps) {
-  const [status, setStatus] = useState<ChromeStatus | null>(null);
-  const [pages, setPages] = useState<PageInfo[]>([]);
-  const [checking, setChecking] = useState(true);
+interface ManagedPage {
+  name: string;
+  url: string;
+}
+
+export function Settings({ onPageChange }: Props) {
+  const [status, setStatus] = useState<{ browser: string; connected: boolean; currentPage: string | null } | null>(null);
+  const [pages, setPages] = useState<ManagedPage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const checkStatus = async () => {
-    setChecking(true);
+  const loadStatus = () => api.getChromeStatus().then(setStatus).catch(() => setStatus(null));
+  const loadPages = async () => {
+    setLoading(true);
     try {
-      const [s, p] = await Promise.all([api.getChromeStatus(), api.getPages()]);
-      setStatus(s);
-      setPages(p);
-    } catch {
-      setStatus({ browser: "", connected: false });
-      setPages([]);
-    }
-    setChecking(false);
+      const data = await api.getPages();
+      // Filter to actual pages (has facebook.com profile/page URL, short name)
+      const filtered = data.pages.filter((p: ManagedPage) =>
+        p.name.length < 50 &&
+        !p.name.includes("ได้แสดง") &&
+        !p.name.includes("ยังไม่ได้อ่าน") &&
+        !p.name.includes("เพิ่มโพสต์") &&
+        !p.name.includes("ดูทั้งหมด") &&
+        !["Meta Business Suite", "กล่องข้อความ", "ข้อมูลเชิงลึก"].includes(p.name)
+      );
+      setPages(filtered);
+    } catch { setPages([]); }
+    setLoading(false);
   };
 
-  useEffect(() => { checkStatus(); }, []);
+  useEffect(() => { loadStatus(); loadPages(); }, []);
 
   const handleSwitch = async (pageName: string) => {
     setSwitching(pageName);
     try {
       const result = await api.switchPage(pageName);
-      onPageChange(result.currentPage);
-      toast(`Switched to ${result.currentPage}`, "success");
-      await checkStatus();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Switch failed";
-      toast(msg, "error");
+      if (result.success) {
+        onPageChange(pageName);
+        toast(`Switched to ${pageName}`, "success");
+        loadStatus();
+      } else {
+        toast(`Failed: ${result.error}`, "error");
+      }
+    } catch (e: any) {
+      toast(e.message, "error");
     }
     setSwitching(null);
   };
 
   return (
-    <div>
-      <h1 className="text-lg font-semibold text-white mb-5">Settings</h1>
-
-      {/* Active Page */}
-      <Card title="Active Page" className="mb-4">
-        {checking ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-card-hover rounded-md animate-pulse" />
-            ))}
+    <div className="space-y-4">
+      {/* Pages */}
+      <Card>
+        <CardTitle>Your pages</CardTitle>
+        {loading ? (
+          <div className="mt-3 space-y-3">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
           </div>
         ) : pages.length === 0 ? (
-          <p className="text-sm text-text-muted">No pages found. Connect Chrome first.</p>
+          <p className="text-sm text-subtle mt-3">No pages found</p>
         ) : (
-          <div className="space-y-2">
-            {pages.map((p) => (
-              <div
-                key={p.name}
-                className={`flex items-center justify-between p-3 rounded-lg border transition-colors duration-150 ${
-                  p.active
-                    ? "border-green-500/30 bg-green-500/5"
-                    : "border-border hover:bg-card-hover"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`w-2.5 h-2.5 rounded-full ${p.active ? "bg-green-500" : "bg-text-muted"}`} />
-                  <span className={`text-sm ${p.active ? "text-green-400 font-medium" : "text-gray-300"}`}>
-                    {p.name}
-                  </span>
+          <div className="mt-3 space-y-0">
+            {pages.map((p) => {
+              const isActive = status?.currentPage === p.name;
+              return (
+                <div key={p.name} className={`flex items-center justify-between py-3 border-b border-ring last:border-0 ${isActive ? "bg-success/5 -mx-4 px-4 rounded-[var(--radius-md)]" : ""}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isActive ? "bg-success" : "bg-subtle"}`} />
+                      <span className="text-sm font-medium text-foreground truncate">{p.name}</span>
+                    </div>
+                    <div className="text-xs text-subtle ml-4 truncate font-mono">{p.url}</div>
+                  </div>
+                  {isActive ? (
+                    <Badge variant="success" className="ml-3">Active</Badge>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="ml-3 shrink-0"
+                      onClick={() => handleSwitch(p.name)}
+                      disabled={switching !== null}
+                    >
+                      {switching === p.name ? "..." : "Switch"}
+                    </Button>
+                  )}
                 </div>
-                {p.active ? (
-                  <span className="text-xs text-green-500">active</span>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleSwitch(p.name)}
-                    disabled={switching !== null}
-                  >
-                    {switching === p.name ? "Switching..." : "Switch"}
-                  </Button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
 
       {/* Connection */}
-      <Card title="Connection">
-        {checking ? (
-          <div className="h-20 bg-card-hover rounded-md animate-pulse" />
-        ) : status?.connected ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-secondary">Chrome:</span>
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm text-green-400">Connected</span>
-            </div>
-            {status.browser && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-secondary">Browser:</span>
-                <span className="text-xs text-gray-400 font-mono">{status.browser}</span>
-              </div>
-            )}
+      <Card>
+        <CardTitle>Connection</CardTitle>
+        <div className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted">Browser</span>
+            <span className="text-foreground">{status?.browser || "Not connected"}</span>
           </div>
-        ) : (
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-sm text-red-400 font-medium">Not Connected</span>
-            </div>
-            <p className="text-xs text-text-secondary mb-3">
-              Start Chrome with debug port to connect:
-            </p>
-            <code className="block p-3 bg-page rounded-md font-mono text-xs text-amber-500 break-all mb-3">
-              /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-            </code>
+          <div className="flex justify-between">
+            <span className="text-muted">Status</span>
+            <Badge variant={status?.connected ? "success" : "danger"}>
+              {status?.connected ? "Connected" : "Disconnected"}
+            </Badge>
           </div>
-        )}
-        <Button onClick={checkStatus} disabled={checking} className="mt-3">
-          {checking ? "Checking..." : "Refresh Status"}
-        </Button>
+          <div className="flex justify-between">
+            <span className="text-muted">Active page</span>
+            <span className="text-foreground">{status?.currentPage || "None"}</span>
+          </div>
+        </div>
       </Card>
     </div>
   );

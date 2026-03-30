@@ -1,25 +1,22 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
-import { Button, Card } from "../components/ui";
-import { useToast } from "../components/ui/Toast";
-import type { Target, Template, Comment, Post } from "../types";
+import { Card, CardTitle, Button, Badge, Select, Input, PostSkeleton, useToast } from "../components/ui";
+import type { Target, Template, Comment } from "../types";
 
-interface DashboardProps {
+interface Props {
   currentPage: string | null;
 }
 
-export function Dashboard({ currentPage }: DashboardProps) {
+export function Dashboard({ currentPage }: Props) {
   const [targets, setTargets] = useState<Target[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const { toast } = useToast();
-
-  const hasPage = currentPage !== null;
 
   useEffect(() => {
     api.getTargets().then(setTargets);
@@ -27,187 +24,147 @@ export function Dashboard({ currentPage }: DashboardProps) {
     api.getTemplates().then(setTemplates);
   }, []);
 
-  const todayCount = comments.filter((c) => {
-    if (c.status !== "sent" || !c.sentAt) return false;
-    const sent = new Date(c.sentAt);
-    const now = new Date();
-    return sent.toDateString() === now.toDateString();
-  }).length;
-
   const handleScan = async () => {
-    if (!selectedTarget || !hasPage) return;
+    if (!selectedTarget) return;
     setScanning(true);
+    setPosts([]);
     try {
       const result = await api.scanPosts(selectedTarget);
       setPosts(result.posts);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Scan failed";
-      toast(msg, "error");
+      toast(`Found ${result.posts.length} posts`, "success");
+    } catch (e: any) {
+      toast(e.message, "error");
     }
     setScanning(false);
   };
 
-  const handleSend = async (post: Post) => {
-    if (!commentText.trim() || !selectedTarget || !hasPage) return;
+  const handleSend = async (post: any) => {
+    if (!commentText.trim()) return;
     setSending(true);
     try {
       const result = await api.sendComment({
-        targetId: selectedTarget,
+        targetId: selectedTarget!,
         postUrl: post.url,
-        postText: post.text ?? undefined,
+        postText: post.text,
         commentText,
       });
       if (result.status === "sent") {
-        toast("Comment sent!", "success");
+        toast("Comment sent", "success");
         setCommentText("");
         api.getComments().then(setComments);
       } else {
         toast(`Failed: ${result.error}`, "error");
       }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Send failed";
-      toast(msg, "error");
+    } catch (e: any) {
+      toast(e.message, "error");
     }
     setSending(false);
   };
 
-  return (
-    <div>
-      <h1 className="text-lg font-semibold text-white mb-5">Dashboard</h1>
+  const sentToday = comments.filter((c) => {
+    const d = new Date(c.createdAt);
+    const now = new Date();
+    return c.status === "sent" && d.toDateString() === now.toDateString();
+  }).length;
 
-      {/* Warning: no page selected */}
-      {!hasPage && (
-        <div className="mb-4 px-4 py-3 bg-amber-900/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
-          เลือกเพจก่อนใน Settings
+  const noPage = !currentPage;
+
+  return (
+    <div className="space-y-4">
+      {noPage && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-warning/10 border border-warning/20 rounded-[var(--radius-lg)] text-sm text-warning">
+          Go to Settings to select a page before commenting
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Targets" value={targets.length} />
-        <StatCard label="Templates" value={templates.length} />
-        <StatCard label="Sent" value={comments.filter((c) => c.status === "sent").length} />
-        <StatCard label="Today" value={todayCount} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Targets", value: targets.length },
+          { label: "Templates", value: templates.length },
+          { label: "Sent", value: comments.filter((c) => c.status === "sent").length },
+          { label: "Today", value: sentToday },
+        ].map((s) => (
+          <Card key={s.label} padding="sm" className="text-center">
+            <div className="text-[10px] uppercase tracking-wider text-muted mb-1">{s.label}</div>
+            <div className="text-2xl font-semibold tabular-nums">{s.value}</div>
+          </Card>
+        ))}
       </div>
 
-      {/* Scan */}
-      <Card title="Scan" className="mb-4">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <select
+      <Card>
+        <CardTitle>Scan & Comment</CardTitle>
+        <div className="flex flex-col sm:flex-row gap-2 mt-3">
+          <Select
             value={selectedTarget ?? ""}
             onChange={(e) => setSelectedTarget(Number(e.target.value) || null)}
-            disabled={!hasPage}
-            className="flex-1 px-3 py-2 bg-page border border-border rounded-md text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none transition-colors duration-150 disabled:opacity-50"
+            className="flex-1"
           >
-            <option value="">-- Select Target --</option>
+            <option value="">Select target page</option>
             {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
+              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
-          </select>
-          <Button onClick={handleScan} disabled={!selectedTarget || scanning || !hasPage}>
-            {scanning ? "Scanning..." : "Scan Posts"}
+          </Select>
+          <Button onClick={handleScan} disabled={!selectedTarget || scanning || noPage}>
+            {scanning ? "Scanning..." : "Scan"}
           </Button>
         </div>
       </Card>
 
-      {/* Posts */}
-      {scanning && (
-        <Card className="mb-4">
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-card-hover rounded-md animate-pulse" />
-            ))}
-          </div>
-        </Card>
-      )}
+      {scanning && <PostSkeleton />}
 
       {!scanning && posts.length > 0 && (
-        <Card title={`Posts (${posts.length})`} className="mb-4">
-          <div className="space-y-3">
-            {posts.map((post, i) => (
-              <div key={i} className="p-3 bg-page rounded-lg border border-border">
-                <p className="text-xs text-text-muted mb-1">
-                  {post.author && <span className="text-text-secondary">{post.author} · </span>}
-                  {post.timestamp}
-                </p>
-                <p className="text-sm text-gray-300 mb-3 line-clamp-2">
-                  {post.text || <em className="text-text-muted">No text</em>}
-                </p>
-
-                {/* Template quick buttons */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {templates.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setCommentText(t.content)}
-                      className="px-3 py-1 text-xs bg-card-hover hover:bg-[#252540] text-text-primary rounded-full border-none cursor-pointer transition-colors duration-150"
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Type comment..."
-                    disabled={!hasPage}
-                    className="flex-1 px-3 py-2 bg-page border border-border rounded-md text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none transition-colors duration-150 disabled:opacity-50"
-                  />
-                  <Button
-                    onClick={() => handleSend(post)}
-                    disabled={sending || !commentText.trim() || !hasPage}
-                    className="!bg-green-600 hover:!bg-green-500"
+        <div className="space-y-3">
+          {posts.map((post, i) => (
+            <Card key={i} className="animate-fade-in">
+              <div className="flex items-center gap-2 mb-2">
+                {post.author && <span className="text-xs font-medium text-foreground">{post.author}</span>}
+                {post.timestamp && <span className="text-xs text-subtle">{post.timestamp}</span>}
+              </div>
+              <p className="text-sm text-muted leading-relaxed mb-3 line-clamp-3">
+                {post.text || <span className="italic text-subtle">No text content</span>}
+              </p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {templates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setCommentText(t.content)}
+                    className="px-2.5 py-1 text-xs rounded-full bg-surface-hover text-muted hover:text-foreground hover:bg-overlay border-none cursor-pointer transition-colors duration-150"
                   >
-                    {sending ? "Sending..." : "Send"}
-                  </Button>
-                </div>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Type comment..."
+                  className="flex-1"
+                />
+                <Button variant="success" onClick={() => handleSend(post)} disabled={sending || !commentText.trim() || noPage}>
+                  {sending ? "..." : "Send"}
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {comments.length > 0 && (
+        <Card>
+          <CardTitle>Recent</CardTitle>
+          <div className="mt-3 space-y-0">
+            {comments.slice(0, 8).map((c) => (
+              <div key={c.id} className="flex items-center justify-between py-2.5 border-b border-ring last:border-0">
+                <span className="text-sm text-muted truncate flex-1 mr-3">{c.commentText.slice(0, 60)}</span>
+                <Badge variant={c.status === "sent" ? "success" : c.status === "failed" ? "danger" : "warning"}>
+                  {c.status}
+                </Badge>
               </div>
             ))}
           </div>
         </Card>
       )}
-
-      {/* Recent Comments */}
-      <Card title="Recent Comments">
-        {comments.length === 0 ? (
-          <p className="text-sm text-text-muted">No comments yet</p>
-        ) : (
-          <div className="space-y-0">
-            {comments.slice(0, 10).map((c) => (
-              <div
-                key={c.id}
-                className="flex justify-between items-center px-3 py-2 border-b border-border text-sm"
-              >
-                <span className="truncate mr-4 text-gray-300">{c.commentText.slice(0, 80)}</span>
-                <span
-                  className={`text-xs shrink-0 ${
-                    c.status === "sent"
-                      ? "text-green-500"
-                      : c.status === "failed"
-                        ? "text-red-500"
-                        : "text-amber-500"
-                  }`}
-                >
-                  {c.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="bg-card border border-border rounded-lg p-4 text-center">
-      <div className="text-xs text-text-secondary mb-1">{label}</div>
-      <div className="text-2xl font-bold text-white">{value}</div>
     </div>
   );
 }
