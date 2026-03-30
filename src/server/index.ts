@@ -6,6 +6,7 @@ import targets from "./routes/targets";
 import templates from "./routes/templates";
 import comments from "./routes/comments";
 import sessions from "./routes/sessions";
+import activity from "./routes/activity";
 
 const app = new Hono();
 
@@ -20,6 +21,7 @@ app.route("/api/targets", targets);
 app.route("/api/templates", templates);
 app.route("/api/comments", comments);
 app.route("/api/sessions", sessions);
+app.route("/api/activity", activity);
 
 import { seedTemplates } from "./db/seed";
 seedTemplates();

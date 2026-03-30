@@ -3,6 +3,7 @@ import { db, schema } from "../db";
 import { eq, desc } from "drizzle-orm";
 import { scanTargetPosts, sendComment, getCurrentPage } from "../browser";
 import { generateComment } from "../ai/generate-comment";
+import { notifyActivity } from "./activity";
 
 const app = new Hono();
 
@@ -96,11 +97,10 @@ app.post("/send", async (c) => {
       })
       .where(eq(schema.comments.id, comment.id));
 
-    return c.json({
-      id: comment.id,
-      status: result.success ? "sent" : "failed",
-      error: result.error,
-    });
+    const status = result.success ? "sent" : "failed";
+    notifyActivity("comment_" + status, { targetId: body.targetId, postUrl: body.postUrl, comment: body.commentText.slice(0, 100) });
+
+    return c.json({ id: comment.id, status, error: result.error });
   } catch (e) {
     await db
       .update(schema.comments)

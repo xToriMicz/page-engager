@@ -48,6 +48,11 @@ export const sendComment = (data: {
   templateId?: number;
 }) => request<SendCommentResult>("/comments/send", { method: "POST", body: JSON.stringify(data) });
 
+// Activity
+export const getActivityLog = () => request<{ log: any[]; total: number }>("/activity/log");
+export const getReport = (days = 7) => request<any>(`/activity/report?days=${days}`);
+export const getStats = () => request<{ totalSent: number; todaySent: number; todayFailed: number; targets: number }>("/activity/stats");
+
 // Chrome connection & pages
 export const getChromeStatus = () =>
   request<ChromeStatus>("/sessions/status");
