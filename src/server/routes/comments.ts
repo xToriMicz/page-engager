@@ -28,17 +28,19 @@ app.post("/scan/:targetId", async (c) => {
 
   if (!target) return c.json({ error: "target not found" }, 404);
 
-  // Get active session cookies
-  const session = await db
-    .select()
-    .from(schema.sessions)
-    .where(eq(schema.sessions.active, true))
-    .get();
-
-  if (!session) return c.json({ error: "no active session. login first" }, 400);
-
-  const posts = await scanTargetPosts(target.url, session.cookies);
-  return c.json({ target: target.name, posts });
+  try {
+    const posts = await scanTargetPosts(target.url);
+    return c.json({ target: target.name, posts });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("scan error:", msg);
+    if (msg.includes("connect") || msg.includes("ECONNREFUSED")) {
+      return c.json({
+        error: "Cannot connect to Chrome. Start Chrome with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222",
+      }, 400);
+    }
+    return c.json({ error: msg }, 500);
+  }
 });
 
 // Send comment (semi-auto)
@@ -55,14 +57,6 @@ app.post("/send", async (c) => {
     return c.json({ error: "postUrl and commentText required" }, 400);
   }
 
-  const session = await db
-    .select()
-    .from(schema.sessions)
-    .where(eq(schema.sessions.active, true))
-    .get();
-
-  if (!session) return c.json({ error: "no active session. login first" }, 400);
-
   // Record comment as pending
   const [comment] = await db
     .insert(schema.comments)
@@ -76,23 +70,31 @@ app.post("/send", async (c) => {
     })
     .returning();
 
-  // Send via Playwright
-  const result = await sendComment(body.postUrl, body.commentText, session.cookies);
+  try {
+    const result = await sendComment(body.postUrl, body.commentText);
 
-  // Update status
-  await db
-    .update(schema.comments)
-    .set({
+    await db
+      .update(schema.comments)
+      .set({
+        status: result.success ? "sent" : "failed",
+        sentAt: result.success ? new Date().toISOString() : null,
+      })
+      .where(eq(schema.comments.id, comment.id));
+
+    return c.json({
+      id: comment.id,
       status: result.success ? "sent" : "failed",
-      sentAt: result.success ? new Date().toISOString() : null,
-    })
-    .where(eq(schema.comments.id, comment.id));
+      error: result.error,
+    });
+  } catch (e) {
+    await db
+      .update(schema.comments)
+      .set({ status: "failed" })
+      .where(eq(schema.comments.id, comment.id));
 
-  return c.json({
-    id: comment.id,
-    status: result.success ? "sent" : "failed",
-    error: result.error,
-  });
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ id: comment.id, status: "failed", error: msg });
+  }
 });
 
 export default app;

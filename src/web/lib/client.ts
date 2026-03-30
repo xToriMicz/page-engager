@@ -14,8 +14,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Targets
 export const getTargets = () => request<any[]>("/targets");
-export const addTarget = (data: { name: string; url: string }) =>
+export const addTarget = (data: { name?: string; url: string }) =>
   request<any>("/targets", { method: "POST", body: JSON.stringify(data) });
+export const resolveTarget = (url: string) =>
+  request<{ name: string; url: string }>("/targets/resolve", { method: "POST", body: JSON.stringify({ url }) });
 export const deleteTarget = (id: number) =>
   request<any>(`/targets/${id}`, { method: "DELETE" });
 
@@ -38,13 +40,6 @@ export const sendComment = (data: {
   templateId?: number;
 }) => request<any>("/comments/send", { method: "POST", body: JSON.stringify(data) });
 
-// Sessions
-export const getSessions = () => request<any[]>("/sessions");
-export const openLogin = () =>
-  request<{ message: string }>("/sessions/login", { method: "POST" });
-export const captureSession = (name: string) =>
-  request<any>("/sessions/capture", { method: "POST", body: JSON.stringify({ name }) });
-export const deleteSession = (id: number) =>
-  request<any>(`/sessions/${id}`, { method: "DELETE" });
-export const closeBrowser = () =>
-  request<any>("/sessions/close-browser", { method: "POST" });
+// Chrome connection
+export const getChromeStatus = () =>
+  request<{ browser: string; connected: boolean }>("/sessions/status");

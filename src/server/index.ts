@@ -20,6 +20,9 @@ app.route("/api/templates", templates);
 app.route("/api/comments", comments);
 app.route("/api/sessions", sessions);
 
+import { seedTemplates } from "./db/seed";
+seedTemplates();
+
 console.log("🚀 Page Engager API running on http://localhost:3000");
 
 export default {

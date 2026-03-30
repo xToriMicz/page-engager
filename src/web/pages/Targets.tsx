@@ -1,17 +1,29 @@
 import { useState, useEffect } from "react";
-import * as api from "../api";
+import * as api from "../lib/client";
 
 export function Targets() {
   const [targets, setTargets] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [resolving, setResolving] = useState(false);
 
   const load = () => api.getTargets().then(setTargets);
   useEffect(() => { load(); }, []);
 
+  const handleUrlBlur = async () => {
+    if (!url || name) return; // don't override if name already set
+    if (!url.includes("facebook.com")) return;
+    setResolving(true);
+    try {
+      const result = await api.resolveTarget(url);
+      if (result.name) setName(result.name);
+    } catch { /* ignore */ }
+    setResolving(false);
+  };
+
   const handleAdd = async () => {
-    if (!name || !url) return;
-    await api.addTarget({ name, url });
+    if (!url) return;
+    await api.addTarget({ name: name || undefined, url });
     setName("");
     setUrl("");
     load();
@@ -33,12 +45,13 @@ export function Targets() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Page name"
-            style={{ ...inputStyle, width: "200px" }}
+            placeholder={resolving ? "Fetching page name..." : "Page name (auto-fill)"}
+            style={{ ...inputStyle, width: "250px" }}
           />
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            onBlur={handleUrlBlur}
             placeholder="https://facebook.com/pagename"
             style={{ ...inputStyle, flex: 1 }}
           />

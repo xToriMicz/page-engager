@@ -15,7 +15,8 @@ CREATE TABLE `comments` (
 CREATE TABLE `sessions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
-	`cookies` text NOT NULL,
+	`profile_dir` text DEFAULT '' NOT NULL,
+	`cookies` text DEFAULT '[]' NOT NULL,
 	`active` integer DEFAULT true NOT NULL,
 	`created_at` text NOT NULL
 );

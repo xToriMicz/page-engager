@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "dfa3611b-1d09-4912-99c3-e9c7b6387b38",
+  "id": "66eb6cc6-8dd0-46bd-bbf8-23defc7a30b4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "comments": {
@@ -122,12 +122,21 @@
           "notNull": true,
           "autoincrement": false
         },
+        "profile_dir": {
+          "name": "profile_dir",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
         "cookies": {
           "name": "cookies",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'[]'"
         },
         "active": {
           "name": "active",

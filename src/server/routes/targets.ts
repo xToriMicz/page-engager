@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db, schema } from "../db";
 import { eq } from "drizzle-orm";
+import { fetchPageName as fetchPageNameViaPlaywright } from "../browser";
 
 const app = new Hono();
 
@@ -10,19 +11,42 @@ app.get("/", async (c) => {
   return c.json(all);
 });
 
+// Fetch page name from Facebook URL
+app.post("/resolve", async (c) => {
+  const body = await c.req.json<{ url: string }>();
+  if (!body.url) return c.json({ error: "url required" }, 400);
+
+  try {
+    const name = await fetchPageName(body.url);
+    return c.json({ name, url: body.url });
+  } catch (e) {
+    console.error("resolve error:", e);
+    return c.json({ name: "", url: body.url });
+  }
+});
+
 // Add target
 app.post("/", async (c) => {
-  const body = await c.req.json<{ name: string; url: string }>();
-  if (!body.name || !body.url) {
-    return c.json({ error: "name and url required" }, 400);
+  const body = await c.req.json<{ name?: string; url: string }>();
+  if (!body.url) {
+    return c.json({ error: "url required" }, 400);
   }
 
-  // Extract page ID from URL if possible
+  // Auto-fetch name if not provided
+  let name = body.name?.trim();
+  if (!name) {
+    try {
+      name = await fetchPageName(body.url);
+    } catch {
+      name = body.url;
+    }
+  }
+
   const pageId = extractPageId(body.url);
 
   const result = await db
     .insert(schema.targets)
-    .values({ name: body.name, url: body.url, pageId })
+    .values({ name, url: body.url, pageId })
     .returning();
 
   return c.json(result[0], 201);
@@ -50,9 +74,22 @@ app.delete("/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+async function fetchPageName(url: string): Promise<string> {
+  return fetchPageNameViaPlaywright(url);
+}
+
 function extractPageId(url: string): string | null {
-  const match = url.match(/facebook\.com\/(?:pages\/[^/]+\/)?(\d+)|facebook\.com\/([a-zA-Z0-9.]+)/);
-  if (match) return match[1] || match[2] || null;
+  // profile.php?id=100083118565344
+  const idMatch = url.match(/[?&]id=(\d+)/);
+  if (idMatch) return idMatch[1];
+  // facebook.com/pages/Name/123456 or facebook.com/123456
+  const pathMatch = url.match(/facebook\.com\/(?:pages\/[^/]+\/)?(\d+)/);
+  if (pathMatch) return pathMatch[1];
+  // facebook.com/vanityname
+  const vanityMatch = url.match(/facebook\.com\/([a-zA-Z0-9.]+)\/?(\?|$)/);
+  if (vanityMatch && !["profile.php", "pages", "groups", "watch"].includes(vanityMatch[1])) {
+    return vanityMatch[1];
+  }
   return null;
 }
 

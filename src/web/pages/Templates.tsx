@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import * as api from "../api";
+import * as api from "../lib/client";
 
 export function Templates() {
   const [templates, setTemplates] = useState<any[]>([]);

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import * as api from "../api";
+import * as api from "../lib/client";
 
 export function Dashboard() {
   const [targets, setTargets] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [chromeConnected, setChromeConnected] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -15,7 +15,7 @@ export function Dashboard() {
   useEffect(() => {
     api.getTargets().then(setTargets);
     api.getComments().then(setComments);
-    api.getSessions().then(setSessions);
+    api.getChromeStatus().then((s) => setChromeConnected(s.connected)).catch(() => {});
     api.getTemplates().then(setTemplates);
   }, []);
 
@@ -54,7 +54,7 @@ export function Dashboard() {
     setSending(false);
   };
 
-  const activeSession = sessions.find((s) => s.active);
+  // Chrome connection status for display
 
   return (
     <div>
@@ -66,9 +66,9 @@ export function Dashboard() {
         <StatusCard label="Templates" value={templates.length} />
         <StatusCard label="Comments Sent" value={comments.filter((c) => c.status === "sent").length} />
         <StatusCard
-          label="Session"
-          value={activeSession ? activeSession.name : "None"}
-          color={activeSession ? "#22c55e" : "#ef4444"}
+          label="Chrome"
+          value={chromeConnected ? "Connected" : "Disconnected"}
+          color={chromeConnected ? "#22c55e" : "#ef4444"}
         />
       </div>
 

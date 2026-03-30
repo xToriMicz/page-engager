@@ -38,7 +38,8 @@ export const comments = sqliteTable("comments", {
 export const sessions = sqliteTable("sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  cookies: text("cookies").notNull(), // JSON string of cookies
+  profileDir: text("profile_dir").notNull().default(""), // Chrome profile dir e.g. "Profile 8"
+  cookies: text("cookies").notNull().default("[]"), // legacy — kept for backwards compat
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at")
     .notNull()
