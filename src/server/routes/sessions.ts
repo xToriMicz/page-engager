@@ -56,6 +56,20 @@ app.post("/switch-page", async (c) => {
   return c.json(result);
 });
 
+// Screenshot current browser state (monitor for headless mode)
+app.get("/screenshot", async (c) => {
+  try {
+    const { connectToChrome } = await import("../browser");
+    const ctx = await connectToChrome();
+    const pages = ctx.pages();
+    if (pages.length === 0) return c.json({ error: "no pages open" }, 404);
+    const screenshot = await pages[pages.length - 1].screenshot({ type: "png" });
+    return new Response(screenshot, { headers: { "Content-Type": "image/png", "Cache-Control": "no-cache" } });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // Close Playwright connection
 app.post("/close-browser", async (c) => {
   await closeBrowser();

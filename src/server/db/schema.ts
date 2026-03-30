@@ -35,6 +35,18 @@ export const comments = sqliteTable("comments", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+export const scanCache = sqliteTable("scan_cache", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetId: integer("target_id").references(() => targets.id),
+  posts: text("posts").notNull().default("[]"),
+  scannedAt: text("scanned_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const sessions = sqliteTable("sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
