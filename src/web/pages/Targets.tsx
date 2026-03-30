@@ -39,7 +39,7 @@ export function Targets() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-5">Target Pages</h1>
+      <h1 className="text-lg font-semibold text-white mb-5">Target Pages</h1>
 
       <Card title="Add Target" className="mb-4">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -62,27 +62,27 @@ export function Targets() {
 
       <Card title={`Targets (${targets.length})`}>
         {targets.length === 0 ? (
-          <p className="text-dark-400 text-sm">No targets yet</p>
+          <p className="text-sm text-text-muted">No targets yet</p>
         ) : (
-          targets.map((t) => (
-            <div
-              key={t.id}
-              className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border-b border-dark-600 gap-2"
-            >
-              <div className="min-w-0">
-                <div className="font-bold text-sm">{t.name}</div>
-                <div className="text-xs text-dark-300 truncate">{t.url}</div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-xs ${t.active ? "text-green-500" : "text-dark-400"}`}>
-                  {t.active ? "Active" : "Inactive"}
-                </span>
-                <Button variant="danger" size="sm" onClick={() => handleDelete(t.id)}>
-                  Delete
+          <div className="space-y-0">
+            {targets.map((t) => (
+              <div
+                key={t.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border-b border-border gap-2 hover:bg-card-hover transition-colors duration-150"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`w-2 h-2 rounded-full ${t.active ? "bg-green-500" : "bg-text-muted"}`} />
+                    <span className="text-sm font-medium text-gray-200">{t.name}</span>
+                  </div>
+                  <div className="text-xs text-text-secondary font-mono truncate pl-4">{t.url}</div>
+                </div>
+                <Button variant="danger" onClick={() => handleDelete(t.id)}>
+                  Remove
                 </Button>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </Card>
     </div>

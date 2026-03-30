@@ -31,9 +31,26 @@ export interface Post {
   url: string;
   text: string | null;
   timestamp: string;
+  author?: string;
 }
 
 export interface ChromeStatus {
   browser: string;
   connected: boolean;
+  currentPage?: string;
+}
+
+export interface PageInfo {
+  name: string;
+  active: boolean;
+}
+
+export interface SendCommentResult {
+  status: "sent" | "failed";
+  error?: string;
+}
+
+export interface ScanResult {
+  target: string;
+  posts: Post[];
 }

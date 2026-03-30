@@ -1,6 +1,6 @@
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-const base = "px-3 py-2 bg-dark-700 border border-dark-500 rounded-md text-dark-100 text-sm placeholder:text-dark-400 focus:outline-none focus:border-blue-500 transition-colors";
+const base = "w-full px-3 py-2 bg-page border border-border rounded-md text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none transition-colors duration-150";
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={`${base} ${className}`} {...props} />;
