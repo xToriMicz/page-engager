@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db, schema } from "../db";
 import { eq } from "drizzle-orm";
 import { fetchPageName as fetchPageNameViaPlaywright } from "../browser";
+import { discoverEngagers } from "../browser/discover";
 
 const app = new Hono();
 
@@ -25,7 +26,20 @@ app.post("/resolve", async (c) => {
   }
 });
 
-// Add target
+// Discover engagers from our own page
+app.post("/discover", async (c) => {
+  const body = await c.req.json<{ pageUrl: string; postsToScan?: number }>();
+  if (!body.pageUrl) return c.json({ error: "pageUrl required" }, 400);
+
+  try {
+    const engagers = await discoverEngagers(body.pageUrl, body.postsToScan || 5);
+    return c.json({ engagers, total: engagers.length });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Add target from discovered engager (or manual)
 app.post("/", async (c) => {
   const body = await c.req.json<{ name?: string; url: string }>();
   if (!body.url) {

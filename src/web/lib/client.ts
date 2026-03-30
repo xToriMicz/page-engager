@@ -20,6 +20,10 @@ export const addTarget = (data: { name?: string; url: string }) =>
   request<Target>("/targets", { method: "POST", body: JSON.stringify(data) });
 export const resolveTarget = (url: string) =>
   request<{ name: string; url: string }>("/targets/resolve", { method: "POST", body: JSON.stringify({ url }) });
+export const discoverEngagers = (pageUrl: string) =>
+  request<{ engagers: { name: string; url: string; interactionCount: number }[]; total: number }>(
+    "/targets/discover", { method: "POST", body: JSON.stringify({ pageUrl }) }
+  );
 export const deleteTarget = (id: number) =>
   request<{ success: boolean }>(`/targets/${id}`, { method: "DELETE" });
 
