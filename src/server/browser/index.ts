@@ -208,8 +208,9 @@ export async function switchProfileOnPage(page: import("playwright").Page, pageN
       const elements = dialog.querySelectorAll('[role="radio"], [role="option"], [role="button"], [tabindex="0"]');
       for (const el of elements) {
         const text = el.textContent?.trim() || "";
-        if (text.includes(name) && !text.includes("ดูโปรไฟล์") && text.length < 100) {
-          // This is the profile row — click it
+        // Match exact name or name with minimal extra text (< 2x name length)
+        // This prevents matching notifications that contain the page name
+        if (text.includes(name) && !text.includes("ดูโปรไฟล์") && !text.includes("ติดตาม") && !text.includes("แจ้งเตือน") && text.length < name.length * 3) {
           (el as HTMLElement).click();
           return `Clicked element with role="${el.getAttribute("role")}" text="${text.slice(0, 50)}"`;
         }
@@ -421,42 +422,67 @@ export async function sendComment(postUrl: string, commentText: string): Promise
 
     emitAction(`Preparing to comment on post...`);
     await page.waitForTimeout(1000 + Math.random() * 2000);
-    await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(3000);
+    // Navigate to post — add ?comment_id= to force full page view (not popup)
+    const fullUrl = postUrl.includes("?") ? postUrl : postUrl + "?__cft__[0]=";
+    await page.goto(fullUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(4000);
+    // Close any popup/dialog that might overlay
+    const closeBtn = page.locator('[aria-label="ปิด"], [aria-label="Close"]').first();
+    if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await closeBtn.click();
+      await page.waitForTimeout(1000);
+    }
 
     // Scroll down to make comment area visible
     emitAction("Opening comment box...");
-    await page.evaluate(() => window.scrollBy(0, 300));
-    await page.waitForTimeout(1000);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(2000);
 
-    // Click "Comment" / "แสดงความคิดเห็น" button to open comment box
-    const commentBtn = page.locator('[aria-label*="แสดงความคิดเห็น"], [aria-label*="Comment"], [aria-label*="comment"], [aria-label*="Write a comment"], [aria-label*="Write a public comment"]').first();
+    // Debug: dump all aria-labels and contenteditable elements
+    const debugInfo = await page.evaluate(() => {
+      const ariaLabels: string[] = [];
+      document.querySelectorAll('[aria-label]').forEach((el) => {
+        const label = el.getAttribute("aria-label") || "";
+        if (label.includes("comment") || label.includes("Comment") || label.includes("ความคิดเห็น") || label.includes("แสดง") || label.includes("เขียน")) {
+          ariaLabels.push(`${el.tagName}[aria-label="${label.slice(0, 80)}"] role="${el.getAttribute("role") || ""}" visible=${el.offsetParent !== null}`);
+        }
+      });
+      const editables: string[] = [];
+      document.querySelectorAll('[contenteditable="true"]').forEach((el) => {
+        editables.push(`${el.tagName} role="${el.getAttribute("role") || ""}" text="${(el.textContent || "").slice(0, 30)}" visible=${el.offsetParent !== null}`);
+      });
+      return { ariaLabels, editables };
+    });
+    console.log("[comment] aria-labels:", JSON.stringify(debugInfo.ariaLabels));
+    console.log("[comment] editables:", JSON.stringify(debugInfo.editables));
+
+    // Click "แสดงความคิดเห็น" button
+    const commentBtn = page.locator('[aria-label="แสดงความคิดเห็น"], [aria-label="Comment"]').first();
     if (await commentBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      emitAction("Clicking comment button...");
       await commentBtn.click();
-      await page.waitForTimeout(2000);
     }
 
-    // Find comment textbox — Facebook uses multiple formats
-    emitAction("Finding comment input...");
-    const commentBox = page.locator([
-      '[contenteditable="true"][role="textbox"]',
-      '[data-lexical-editor="true"]',
-      '[aria-label*="เขียนความคิดเห็น"]',
-      '[aria-label*="Write a comment"]',
-      '[aria-label*="Write a public comment"]',
-      '[aria-label*="แสดงความคิดเห็นในฐานะ"]',
-      '[placeholder*="เขียนความคิดเห็น"]',
-      '[placeholder*="Write a comment"]',
-    ].join(", ")).first();
-
+    // Wait for comment textbox to appear (up to 10s)
+    emitAction("Waiting for comment input...");
+    const textboxSelector = '[contenteditable="true"][role="textbox"], [data-lexical-editor="true"], [aria-label*="เขียนความคิดเห็น"], [aria-label*="แสดงความคิดเห็นในฐานะ"], [aria-label*="Write a comment"]';
     try {
-      await commentBox.click({ timeout: 10000 });
+      await page.waitForSelector(textboxSelector, { timeout: 10000 });
     } catch {
-      // Fallback: try clicking any contenteditable near comment area
-      emitAction("Trying fallback comment input...");
-      const fallback = page.locator('[contenteditable="true"]').last();
-      await fallback.click({ timeout: 5000 });
+      // Maybe need to scroll down to see comment box
+      emitAction("Scrolling to find comment box...");
+      await page.evaluate(() => window.scrollBy(0, 500));
+      await page.waitForTimeout(2000);
+      try {
+        await page.waitForSelector(textboxSelector, { timeout: 5000 });
+      } catch {
+        throw new Error("Comment textbox not found after scroll");
+      }
     }
+
+    // Click the textbox to focus
+    const commentBox = page.locator(textboxSelector).first();
+    await commentBox.click({ timeout: 5000 });
     await page.waitForTimeout(1000);
 
     // Type comment — use keyboard.insertText for Thai text (more reliable than type)

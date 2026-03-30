@@ -63,6 +63,7 @@ app.post("/scan/:targetId", async (c) => {
       .from(schema.scanCache)
       .where(eq(schema.scanCache.targetId, targetId))
       .orderBy(desc(schema.scanCache.scannedAt))
+      .limit(100)
       .offset(3)
       .all();
     for (const old of oldScans) {
