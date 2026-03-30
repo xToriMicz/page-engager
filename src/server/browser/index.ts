@@ -1,40 +1,54 @@
-import { chromium, type BrowserContext } from "playwright";
-import { homedir } from "os";
-import { join } from "path";
+import { chromium, type Browser, type BrowserContext } from "playwright";
+import { extractFacebookCookies } from "./extract-cookies";
 
+let browser: Browser | null = null;
 let context: BrowserContext | null = null;
+let cookiesInjected = false;
 
-const CHROME_PROFILE = join(homedir(), "Library/Application Support/Google/Chrome");
-const PROFILE_DIR = "Profile 8";
-
-// Launch persistent context with real Chrome profile
+// Launch browser + inject cookies from Chrome main profile
 export async function connectToChrome(): Promise<BrowserContext> {
-  if (context) return context;
+  if (context && browser?.isConnected()) return context;
 
-  context = await chromium.launchPersistentContext(
-    join(CHROME_PROFILE, PROFILE_DIR),
-    {
-      channel: "chrome",
-      headless: false,
-      args: [
-        "--disable-blink-features=AutomationControlled",
-        "--no-first-run",
-        "--no-default-browser-check",
-      ],
-      viewport: { width: 1280, height: 800 },
+  // Close old
+  await closeBrowser();
+
+  browser = await chromium.launch({
+    headless: false,
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--no-first-run",
+    ],
+  });
+
+  context = await browser.newContext({
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    viewport: { width: 1280, height: 800 },
+  });
+
+  // Inject cookies from Chrome main profile
+  if (!cookiesInjected) {
+    const cookies = extractFacebookCookies();
+    if (cookies.length > 0) {
+      await context.addCookies(cookies);
+      cookiesInjected = true;
+      console.log(`Injected ${cookies.length} Facebook cookies from Chrome`);
+    } else {
+      console.warn("No Facebook cookies found in Chrome profile");
     }
-  );
+  }
+
   return context;
 }
 
 export async function isConnected(): Promise<boolean> {
-  return context !== null;
+  return browser?.isConnected() ?? false;
 }
 
 export async function getChromeInfo(): Promise<{ browser: string; connected: boolean }> {
+  const connected = browser?.isConnected() ?? false;
   return {
-    browser: context ? "Chrome (persistent profile)" : "",
-    connected: context !== null,
+    browser: connected ? `Chromium (${cookiesInjected ? "cookies injected" : "no cookies"})` : "",
+    connected,
   };
 }
 
@@ -43,6 +57,11 @@ export async function closeBrowser() {
     await context.close().catch(() => {});
     context = null;
   }
+  if (browser) {
+    await browser.close().catch(() => {});
+    browser = null;
+  }
+  cookiesInjected = false;
 }
 
 export interface ScannedPost {
