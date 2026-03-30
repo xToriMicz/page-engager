@@ -62,6 +62,14 @@ export const batchAI = (posts: { text: string; index: number }[]) =>
     "/comments/batch-ai", { method: "POST", body: JSON.stringify({ posts }) }
   );
 
+// Auto-engage
+export const getAutoConfig = () => request<{ maxPostsPerTarget: number; roundsPerDay: number; delayBetweenComments: number }>("/auto/config");
+export const setAutoConfig = (data: { maxPostsPerTarget?: number; roundsPerDay?: number; delayBetweenComments?: number }) =>
+  request<{ ok: boolean }>("/auto/config", { method: "POST", body: JSON.stringify(data) });
+export const getAutoStatus = () => request<{ running: boolean }>("/auto/status");
+export const runAuto = () => request<{ sent: number; skipped: number; failed: number }>("/auto/run", { method: "POST" });
+export const stopAuto = () => request<{ ok: boolean }>("/auto/stop", { method: "POST" });
+
 // Activity
 export const getActivityLog = () => request<{ log: any[]; total: number }>("/activity/log");
 export const getReport = (days = 7) => request<any>(`/activity/report?days=${days}`);

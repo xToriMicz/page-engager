@@ -33,11 +33,15 @@ export function Dashboard({ currentPage }: Props) {
   const [analyses, setAnalyses] = useState<Record<number, PostAnalysis>>({});
   const [generating, setGenerating] = useState<number | null>(null);
   const [sending, setSending] = useState<number | null>(null);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoConfig, setAutoConfig] = useState({ maxPostsPerTarget: 3, roundsPerDay: 1, delayBetweenComments: 60 });
   const { toast } = useToast();
 
   useEffect(() => {
     api.getTargets().then(setTargets);
     api.getComments().then(setComments);
+    api.getAutoConfig().then(setAutoConfig).catch(() => {});
+    api.getAutoStatus().then((s) => setAutoRunning(s.running)).catch(() => {});
   }, []);
 
   // Load last scan cache on mount
@@ -188,9 +192,85 @@ export function Dashboard({ currentPage }: Props) {
         ))}
       </div>
 
-      {/* Scan */}
+      {/* Auto Engage */}
       <Card>
-        <CardTitle>Scan & Engage</CardTitle>
+        <CardTitle>Auto Engage</CardTitle>
+        <p className="text-xs text-subtle mt-1 mb-3">
+          1 click = scan all targets, AI generate, auto-send comments. Won't comment on posts already commented.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 mb-3">
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted">Max posts/target</label>
+            <select
+              value={autoConfig.maxPostsPerTarget}
+              onChange={(e) => {
+                const v = +e.target.value;
+                setAutoConfig((c) => ({ ...c, maxPostsPerTarget: v }));
+                api.setAutoConfig({ maxPostsPerTarget: v });
+              }}
+              className="w-full mt-1 bg-background border border-ring rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-foreground"
+            >
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted">Delay (seconds)</label>
+            <select
+              value={autoConfig.delayBetweenComments}
+              onChange={(e) => {
+                const v = +e.target.value;
+                setAutoConfig((c) => ({ ...c, delayBetweenComments: v }));
+                api.setAutoConfig({ delayBetweenComments: v });
+              }}
+              className="w-full mt-1 bg-background border border-ring rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-foreground"
+            >
+              {[30, 45, 60, 90, 120, 180, 300].map((n) => <option key={n} value={n}>{n}s</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted">Rounds/day (24hr)</label>
+            <select
+              value={autoConfig.roundsPerDay}
+              onChange={(e) => {
+                const v = +e.target.value;
+                setAutoConfig((c) => ({ ...c, roundsPerDay: v }));
+                api.setAutoConfig({ roundsPerDay: v });
+              }}
+              className="w-full mt-1 bg-background border border-ring rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-foreground"
+            >
+              {[1, 2, 3, 4, 6, 8, 12, 24].map((n) => <option key={n} value={n}>{n}x</option>)}
+            </select>
+          </div>
+        </div>
+        {autoRunning ? (
+          <Button variant="danger" onClick={() => { api.stopAuto(); setAutoRunning(false); }} className="w-full">
+            Stop Auto
+          </Button>
+        ) : (
+          <Button
+            variant="success"
+            onClick={async () => {
+              setAutoRunning(true);
+              try {
+                const result = await api.runAuto();
+                toast(`Auto done: ${result.sent} sent, ${result.failed} failed`, result.failed > 0 ? "warning" : "success");
+                api.getComments().then(setComments);
+              } catch (e: any) {
+                toast(e.message, "error");
+              }
+              setAutoRunning(false);
+            }}
+            disabled={noPage || targets.length === 0}
+            className="w-full"
+          >
+            Auto Engage ({targets.length} targets)
+          </Button>
+        )}
+      </Card>
+
+      {/* Semi-Auto: Scan & Engage */}
+      <Card>
+        <CardTitle>Semi-Auto: Scan & Engage</CardTitle>
         <div className="mt-3">
           <div className="flex items-center justify-between mb-2">
             <button onClick={selectAll} className="text-xs text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
