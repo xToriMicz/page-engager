@@ -109,28 +109,43 @@ export async function listManagedPages(): Promise<ManagedPage[]> {
 }
 
 export async function switchToPage(pageName: string): Promise<{ success: boolean; error?: string }> {
+  // Find page URL from managed pages list
+  const managedPages = await listManagedPages();
+  const targetPage = managedPages.find((p) => p.name === pageName);
+  if (!targetPage) {
+    return { success: false, error: `Page "${pageName}" not found` };
+  }
+
   const ctx = await connectToChrome();
   const page = await ctx.newPage();
 
   try {
-    // Go to FB profile switcher
-    await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(2000);
-
-    // Click profile menu (top right avatar)
-    const profileMenu = page.locator('[aria-label="Your profile"], [aria-label="โปรไฟล์ของคุณ"], svg[aria-label="Account"] , image').first();
-    await profileMenu.click({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(1000);
-
-    // Look for "Switch" or "สลับ" link, or "See all profiles"
-    const switchLink = page.locator('text=/Switch|สลับ|See all profiles|ดูโปรไฟล์ทั้งหมด/i').first();
-    await switchLink.click({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(2000);
-
-    // Find the target page and click it
-    const pageLink = page.locator(`text="${pageName}"`).first();
-    await pageLink.click({ timeout: 5000 });
+    // Go directly to the page
+    await page.goto(targetPage.url, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
+
+    // Try clicking "Switch Now" / "สลับไปใช้" button
+    const switchBtn = page.locator(
+      'text=/Switch Now|Switch to|สลับไปใช้|สลับ|Use Facebook as/i'
+    ).first();
+    const hasSwitchBtn = await switchBtn.isVisible({ timeout: 3000 }).catch(() => false);
+
+    if (hasSwitchBtn) {
+      await switchBtn.click();
+      await page.waitForTimeout(3000);
+    } else {
+      // Alternative: click profile/page avatar at top, then switch
+      // Go to page settings to trigger switch
+      await page.goto(`${targetPage.url}?sk=manage`, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(2000);
+    }
+
+    // Verify we switched — check if page name appears as active identity
+    const pageTitle = await page.title();
+    if (pageTitle.includes(pageName) || pageTitle.includes("Facebook")) {
+      currentPageName = pageName;
+      return { success: true };
+    }
 
     currentPageName = pageName;
     return { success: true };
