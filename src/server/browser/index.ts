@@ -64,6 +64,92 @@ export async function closeBrowser() {
   cookiesInjected = false;
 }
 
+// --- Page switching ---
+
+export interface ManagedPage {
+  name: string;
+  url: string;
+}
+
+let currentPageName: string | null = null;
+
+export async function listManagedPages(): Promise<ManagedPage[]> {
+  const ctx = await connectToChrome();
+  const page = await ctx.newPage();
+
+  try {
+    await page.goto("https://www.facebook.com/pages/?category=your_pages", {
+      waitUntil: "domcontentloaded", timeout: 30000,
+    });
+    await page.waitForTimeout(3000);
+
+    const pages = await page.evaluate(() => {
+      const results: { name: string; url: string }[] = [];
+      // Find page cards/links
+      const links = document.querySelectorAll('a[href*="/profile.php"], a[href*="facebook.com/"]');
+      const seen = new Set<string>();
+      for (const a of links) {
+        const name = a.textContent?.trim() || "";
+        const href = a.getAttribute("href") || "";
+        if (name && name.length > 1 && name.length < 100 && href.includes("facebook.com") && !seen.has(name)) {
+          // Filter out non-page links
+          if (href.includes("/profile.php?id=") || (!href.includes("/pages") && !href.includes("/settings") && !href.includes("/help"))) {
+            seen.add(name);
+            results.push({ name, url: href.startsWith("http") ? href : `https://www.facebook.com${href}` });
+          }
+        }
+      }
+      return results;
+    });
+
+    return pages;
+  } finally {
+    await page.close();
+  }
+}
+
+export async function switchToPage(pageName: string): Promise<{ success: boolean; error?: string }> {
+  const ctx = await connectToChrome();
+  const page = await ctx.newPage();
+
+  try {
+    // Go to FB profile switcher
+    await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    // Click profile menu (top right avatar)
+    const profileMenu = page.locator('[aria-label="Your profile"], [aria-label="โปรไฟล์ของคุณ"], svg[aria-label="Account"] , image').first();
+    await profileMenu.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1000);
+
+    // Look for "Switch" or "สลับ" link, or "See all profiles"
+    const switchLink = page.locator('text=/Switch|สลับ|See all profiles|ดูโปรไฟล์ทั้งหมด/i').first();
+    await switchLink.click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // Find the target page and click it
+    const pageLink = page.locator(`text="${pageName}"`).first();
+    await pageLink.click({ timeout: 5000 });
+    await page.waitForTimeout(3000);
+
+    currentPageName = pageName;
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+export function getCurrentPage(): string | null {
+  return currentPageName;
+}
+
+// --- Scanning ---
+
 export interface ScannedPost {
   url: string;
   text: string;
