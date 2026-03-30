@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db, schema } from "../db";
 import { eq, desc } from "drizzle-orm";
 import { scanTargetPosts, sendComment, getCurrentPage } from "../browser";
-import { generateComment } from "../ai/generate-comment";
+import { generateComment, analyzePost } from "../ai/generate-comment";
 import { notifyActivity } from "./activity";
 
 const app = new Hono();
@@ -56,6 +56,18 @@ app.post("/generate", async (c) => {
     return c.json({ comment });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
+  }
+});
+
+// AI analyze post type + rating
+app.post("/analyze", async (c) => {
+  const body = await c.req.json<{ postText: string }>();
+  if (!body.postText) return c.json({ error: "postText required" }, 400);
+  try {
+    const analysis = await analyzePost(body.postText);
+    return c.json(analysis);
+  } catch (e: any) {
+    return c.json({ type: "normal", rating: 3, summary: "วิเคราะห์ไม่ได้" });
   }
 });
 

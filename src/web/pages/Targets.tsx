@@ -33,12 +33,12 @@ export function Targets() {
     }).catch(() => {});
   }, []);
 
-  const handleAdd = async (targetUrl?: string) => {
+  const handleAdd = async (targetUrl?: string, name?: string, interactionCount?: number) => {
     const u = targetUrl || url.trim();
     if (!u) return;
     setAdding(true);
     try {
-      await api.addTarget({ url: u });
+      await api.addTarget({ url: u, name, interactionCount, source: targetUrl ? "discover" : "manual" });
       if (!targetUrl) setUrl("");
       load();
       toast("Target added", "success");
@@ -58,7 +58,8 @@ export function Targets() {
     try {
       const result = await api.discoverEngagers(myPageUrl);
       setEngagers(result.engagers);
-      toast(`Found ${result.total} people who engage with your page`, "success");
+      load(); // reload targets — discovered engagers are auto-saved
+      toast(`Found ${result.total} engagers — ${result.added || 0} new, ${result.updated || 0} updated`, "success");
     } catch (e: any) {
       toast(e.message, "error");
     }
@@ -117,7 +118,7 @@ export function Targets() {
                     {alreadyAdded ? (
                       <Badge variant="success">Added</Badge>
                     ) : (
-                      <Button size="xs" onClick={() => handleAdd(e.url)}>Add</Button>
+                      <Button size="xs" onClick={() => handleAdd(e.url, e.name, e.interactionCount)}>Add</Button>
                     )}
                   </div>
                 </div>
@@ -151,11 +152,24 @@ export function Targets() {
           <p className="text-sm text-subtle mt-3">No targets — discover or add manually</p>
         ) : (
           <div className="mt-3">
-            {targets.map((t) => (
+            {targets.map((t: any) => (
               <div key={t.id} className="flex items-center justify-between py-3 border-b border-ring last:border-0">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-foreground truncate">{t.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground truncate">{t.name}</span>
+                    {t.interactionCount > 0 && (
+                      <Badge variant="primary">{t.interactionCount}x</Badge>
+                    )}
+                    {t.source === "discover" && (
+                      <Badge variant="success">Discovered</Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-subtle truncate font-mono">{t.url}</div>
+                  {t.lastSeen && (
+                    <div className="text-[10px] text-subtle mt-0.5">
+                      Last seen: {new Date(t.lastSeen).toLocaleDateString("th-TH")}
+                    </div>
+                  )}
                 </div>
                 <Button variant="danger" size="xs" onClick={() => handleDelete(t.id)} className="ml-3">
                   Remove

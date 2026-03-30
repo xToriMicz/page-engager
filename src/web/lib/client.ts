@@ -16,7 +16,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // Targets
 export const getTargets = () => request<Target[]>("/targets");
-export const addTarget = (data: { name?: string; url: string }) =>
+export const addTarget = (data: { name?: string; url: string; interactionCount?: number; source?: string }) =>
   request<Target>("/targets", { method: "POST", body: JSON.stringify(data) });
 export const resolveTarget = (url: string) =>
   request<{ name: string; url: string }>("/targets/resolve", { method: "POST", body: JSON.stringify({ url }) });
@@ -47,6 +47,10 @@ export const sendComment = (data: {
   commentText: string;
   templateId?: number;
 }) => request<SendCommentResult>("/comments/send", { method: "POST", body: JSON.stringify(data) });
+
+// Analysis
+export const analyzePost = (postText: string) =>
+  request<{ type: string; rating: number; summary: string }>("/comments/analyze", { method: "POST", body: JSON.stringify({ postText }) });
 
 // Activity
 export const getActivityLog = () => request<{ log: any[]; total: number }>("/activity/log");

@@ -30,3 +30,45 @@ export async function generateComment(postText: string, pageName: string): Promi
   if (text.type === "text") return text.text.trim();
   return "";
 }
+
+export interface PostAnalysis {
+  type: "greeting" | "normal" | "sale" | "review" | "news" | "share";
+  rating: number; // 1-5 engagement worthiness
+  summary: string;
+}
+
+export async function analyzePost(postText: string): Promise<PostAnalysis> {
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 100,
+    messages: [
+      {
+        role: "user",
+        content: `วิเคราะห์โพสต์ Facebook นี้:
+"${postText.slice(0, 300)}"
+
+ตอบเป็น JSON เท่านั้น:
+{"type":"greeting|normal|sale|review|news|share","rating":1-5,"summary":"สรุป 5 คำ"}
+
+- greeting = ทักทาย สวัสดี อรุณสวัสดิ์
+- normal = โพสต์ทั่วไป แชร์เรื่องราว
+- sale = ขายของ โปรโมชั่น
+- review = รีวิว แนะนำ
+- news = ข่าว ข้อมูล
+- share = แชร์จากที่อื่น
+- rating: 1=ไม่น่า engage, 5=ควร engage มาก
+
+ตอบ JSON อย่างเดียว`,
+      },
+    ],
+  });
+
+  const text = response.content[0];
+  if (text.type === "text") {
+    try {
+      const match = text.text.match(/\{[^}]+\}/);
+      if (match) return JSON.parse(match[0]);
+    } catch {}
+  }
+  return { type: "normal", rating: 3, summary: "โพสต์ทั่วไป" };
+}

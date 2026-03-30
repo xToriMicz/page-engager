@@ -1,11 +1,26 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/client";
-import { Card, CardTitle, Button, Badge, Select, Input, PostSkeleton, useToast } from "../components/ui";
+import { Card, CardTitle, Button, Badge, Select, PostSkeleton, useToast } from "../components/ui";
 import type { Target, Comment } from "../types";
+
+interface PostAnalysis {
+  type: string;
+  rating: number;
+  summary: string;
+}
 
 interface Props {
   currentPage: string | null;
 }
+
+const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  greeting: { label: "Greeting", color: "primary" },
+  normal: { label: "Normal", color: "default" },
+  sale: { label: "Sale", color: "warning" },
+  review: { label: "Review", color: "success" },
+  news: { label: "News", color: "primary" },
+  share: { label: "Share", color: "default" },
+};
 
 export function Dashboard({ currentPage }: Props) {
   const [targets, setTargets] = useState<Target[]>([]);
@@ -14,6 +29,7 @@ export function Dashboard({ currentPage }: Props) {
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
   const [commentTexts, setCommentTexts] = useState<Record<number, string>>({});
+  const [analyses, setAnalyses] = useState<Record<number, PostAnalysis>>({});
   const [generating, setGenerating] = useState<number | null>(null);
   const [sending, setSending] = useState<number | null>(null);
   const { toast } = useToast();
@@ -29,22 +45,29 @@ export function Dashboard({ currentPage }: Props) {
     if (!selectedTarget) return;
     setScanning(true);
     setPosts([]);
+    setAnalyses({});
+    setCommentTexts({});
     try {
       const result = await api.scanPosts(selectedTarget);
       setPosts(result.posts);
-      // Auto-generate AI comments for all posts
+
+      // Auto-generate AI comments + analyze all posts in parallel
       for (let i = 0; i < result.posts.length; i++) {
         const post = result.posts[i];
         if (post.text) {
           setGenerating(i);
           try {
-            const ai = await api.generateComment(post.text);
+            const [ai, analysis] = await Promise.all([
+              api.generateComment(post.text),
+              api.analyzePost(post.text),
+            ]);
             setCommentTexts((prev) => ({ ...prev, [i]: ai.comment }));
+            setAnalyses((prev) => ({ ...prev, [i]: analysis }));
           } catch {}
         }
       }
       setGenerating(null);
-      toast(`Found ${result.posts.length} posts — AI generated comments`, "success");
+      toast(`Found ${result.posts.length} posts — AI analyzed & generated comments`, "success");
     } catch (e: any) {
       toast(e.message, "error");
     }
@@ -90,9 +113,12 @@ export function Dashboard({ currentPage }: Props) {
     return c.status === "sent" && new Date(c.createdAt).toDateString() === new Date().toDateString();
   }).length;
 
+  const renderStars = (rating: number) => {
+    return "★".repeat(rating) + "☆".repeat(5 - rating);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Warning */}
       {noPage && (
         <div className="px-4 py-3 bg-warning/10 border border-warning/20 rounded-[var(--radius-lg)] text-sm text-warning">
           Go to Settings to select a page first
@@ -131,61 +157,94 @@ export function Dashboard({ currentPage }: Props) {
             {scanning ? "Scanning..." : "Scan & Generate"}
           </Button>
         </div>
-        <p className="text-xs text-subtle mt-2">AI will auto-generate comments for each post</p>
+        <p className="text-xs text-subtle mt-2">AI will auto-classify, rate, and generate comments for each post</p>
       </Card>
 
-      {/* Loading */}
       {scanning && <PostSkeleton />}
 
-      {/* Posts with AI comments */}
+      {/* Posts with full info */}
       {!scanning && posts.length > 0 && (
         <div className="space-y-3">
-          {posts.map((post, i) => (
-            <Card key={i} className="animate-fade-in">
-              {/* Post header */}
-              <div className="flex items-center gap-2 mb-2">
-                {post.author && <span className="text-xs font-medium text-foreground">{post.author}</span>}
-                {post.timestamp && <span className="text-xs text-subtle">{post.timestamp}</span>}
-              </div>
+          {posts.map((post, i) => {
+            const analysis = analyses[i];
+            const typeInfo = analysis ? TYPE_LABELS[analysis.type] || TYPE_LABELS.normal : null;
 
-              {/* Post text */}
-              <p className="text-sm text-muted leading-relaxed mb-3 line-clamp-3">
-                {post.text || <span className="italic text-subtle">No text</span>}
-              </p>
-
-              {/* AI-generated comment */}
-              <div className="bg-background rounded-[var(--radius-md)] p-3 mb-2">
+            return (
+              <Card key={i} className="animate-fade-in">
+                {/* Post header with metadata */}
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase tracking-wider text-primary">AI Comment</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {post.author && <span className="text-xs font-medium text-foreground">{post.author}</span>}
+                    {post.timestamp && <span className="text-xs text-subtle">{post.timestamp}</span>}
+                    {/* Media type */}
+                    {post.hasVideo && <Badge variant="primary">Video</Badge>}
+                    {post.hasImage && !post.hasVideo && <Badge variant="default">Photo</Badge>}
+                    {!post.hasImage && !post.hasVideo && <Badge variant="default">Text</Badge>}
+                  </div>
+                  {/* Post link */}
+                  {post.url && (
+                    <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline shrink-0">
+                      Open
+                    </a>
+                  )}
+                </div>
+
+                {/* AI Analysis badges */}
+                {analysis && (
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <Badge variant={typeInfo?.color as any || "default"}>{typeInfo?.label || analysis.type}</Badge>
+                    <span className="text-xs text-warning">{renderStars(analysis.rating)}</span>
+                    <span className="text-xs text-subtle">{analysis.summary}</span>
+                  </div>
+                )}
+
+                {/* Engagement stats */}
+                <div className="flex items-center gap-3 mb-2 text-xs text-subtle">
+                  {post.reactionCount && <span>{post.reactionCount} reactions</span>}
+                  {post.commentCount > 0 && <span>{post.commentCount} comments</span>}
+                </div>
+
+                {/* Post text (caption) */}
+                <p className="text-sm text-muted leading-relaxed mb-3 line-clamp-4">
+                  {post.text || <span className="italic text-subtle">No text</span>}
+                </p>
+
+                {/* AI-generated comment */}
+                <div className="bg-background rounded-[var(--radius-md)] p-3 mb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] uppercase tracking-wider text-primary">AI Comment</span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleRegenerate(i, post.text)}
+                      disabled={generating === i}
+                    >
+                      {generating === i ? "..." : "Regenerate"}
+                    </Button>
+                  </div>
+                  <textarea
+                    value={commentTexts[i] || ""}
+                    onChange={(e) => setCommentTexts((prev) => ({ ...prev, [i]: e.target.value }))}
+                    placeholder={generating === i ? "AI generating..." : "Comment text"}
+                    rows={2}
+                    className="w-full bg-transparent border border-ring rounded-[var(--radius-sm)] px-3 py-2 text-sm text-foreground resize-none focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                {/* Send */}
+                <div className="flex justify-end">
                   <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => handleRegenerate(i, post.text)}
-                    disabled={generating === i}
+                    variant="success"
+                    size="sm"
+                    onClick={() => handleSend(i, post)}
+                    disabled={sending === i || !commentTexts[i]?.trim() || noPage}
                   >
-                    {generating === i ? "..." : "Regenerate"}
+                    {sending === i ? "Sending..." : "Send Comment"}
                   </Button>
                 </div>
-                <Input
-                  value={commentTexts[i] || ""}
-                  onChange={(e) => setCommentTexts((prev) => ({ ...prev, [i]: e.target.value }))}
-                  placeholder={generating === i ? "AI generating..." : "Comment text"}
-                />
-              </div>
-
-              {/* Send */}
-              <div className="flex justify-end">
-                <Button
-                  variant="success"
-                  size="sm"
-                  onClick={() => handleSend(i, post)}
-                  disabled={sending === i || !commentTexts[i]?.trim() || noPage}
-                >
-                  {sending === i ? "Sending..." : "Send Comment"}
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 

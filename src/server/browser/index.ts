@@ -7,7 +7,7 @@ let context: BrowserContext | null = null;
 let cookiesInjected = false;
 let lastCommentTime = 0;
 
-const HEADLESS = process.env.HEADLESS !== "false"; // default headless
+const HEADLESS = process.env.HEADLESS === "true"; // default visible — see browser work in real-time
 const CHROME_PROFILE = process.env.CHROME_PROFILE || "Profile 8";
 const MIN_COMMENT_INTERVAL = 30_000; // 30 seconds between comments
 
@@ -99,46 +99,152 @@ export async function switchToPage(pageName: string): Promise<{ success: boolean
   const ctx = await connectToChrome();
   const page = await ctx.newPage();
   try {
-    await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(3000);
-    await page.locator('[aria-label="โปรไฟล์ของคุณ"], [aria-label="Your profile"]').first().click({ timeout: 5000 });
-    await page.waitForTimeout(2000);
-    const seeAll = page.locator('text=/ดูโปรไฟล์ทั้งหมด|See all profiles/i').first();
-    if (await seeAll.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await seeAll.click();
-      await page.waitForTimeout(2000);
-    }
-    const pageOptions = page.locator(`span:text-is("${pageName}")`);
-    const count = await pageOptions.count();
-    if (count > 0) {
-      await pageOptions.last().click({ force: true, timeout: 5000 });
-    } else {
-      throw new Error(`Page "${pageName}" not found`);
-    }
-    await page.waitForTimeout(4000);
-    setCurrentPage(pageName);
+    await switchProfileOnPage(page, pageName);
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   } finally { await page.close(); }
 }
 
+// Switch profile on an EXISTING page object (same tab) — use this for discover/scan
+export async function switchProfileOnPage(page: import("playwright").Page, pageName: string): Promise<void> {
+  // Method 1: Use account switcher menu
+  await page.goto("https://www.facebook.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForTimeout(3000);
+
+  // Click account menu (top right avatar)
+  const accountMenu = page.locator('[aria-label="บัญชีของคุณ"], [aria-label="Your account"], [aria-label="Account"], [aria-label="เมนูบัญชี"], [aria-label="Account menu"]').first();
+  const profileMenu = page.locator('[aria-label="โปรไฟล์ของคุณ"], [aria-label="Your profile"]').first();
+
+  // Try account menu first, then profile menu
+  if (await accountMenu.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await accountMenu.click();
+  } else {
+    await profileMenu.click({ timeout: 5000 });
+  }
+  await page.waitForTimeout(2000);
+
+  // Debug: dump all visible text in the menu to see what's available
+  const menuDebug = await page.evaluate(() => {
+    const dialogs = document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"]');
+    const texts: string[] = [];
+    for (const d of dialogs) {
+      d.querySelectorAll('span, a, [role="button"]').forEach((el) => {
+        const t = el.textContent?.trim();
+        if (t && t.length > 1 && t.length < 80) texts.push(t);
+      });
+    }
+    // Also check general visible buttons/links
+    document.querySelectorAll('[role="button"], a').forEach((el) => {
+      const t = el.textContent?.trim();
+      if (t && t.includes("สลับ") || t?.includes("Switch") || t?.includes("โปรไฟล์") || t?.includes("profile")) {
+        texts.push(`[btn] ${t?.slice(0, 60)}`);
+      }
+    });
+    return texts.slice(0, 30);
+  });
+  console.log(`[switch] Menu items:`, JSON.stringify(menuDebug, null, 0));
+
+  // Look for "ดูโปรไฟล์ทั้งหมด" → opens "เลือกโปรไฟล์" dialog
+  const seeAll = page.locator('text=/ดูโปรไฟล์ทั้งหมด|See all profiles/i').first();
+  if (await seeAll.isVisible({ timeout: 3000 }).catch(() => false)) {
+    console.log(`[switch] Found "See all profiles" — clicking`);
+    await seeAll.click();
+    await page.waitForTimeout(3000);
+  }
+
+  // Wait for "เลือกโปรไฟล์" dialog
+  await page.waitForTimeout(2000);
+
+  // In the profile selection dialog, find the clickable row for the page
+  // Facebook renders each profile as a clickable div with role and the page name
+  // We need to click the ROW that contains the page name, not just the text
+  const switched = await page.evaluate((name: string) => {
+    // Find the "เลือกโปรไฟล์" dialog
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    for (const dialog of dialogs) {
+      // Find all clickable elements that contain the page name
+      const elements = dialog.querySelectorAll('[role="radio"], [role="option"], [role="button"], [tabindex="0"]');
+      for (const el of elements) {
+        const text = el.textContent?.trim() || "";
+        if (text.includes(name) && !text.includes("ดูโปรไฟล์") && text.length < 100) {
+          // This is the profile row — click it
+          (el as HTMLElement).click();
+          return `Clicked element with role="${el.getAttribute("role")}" text="${text.slice(0, 50)}"`;
+        }
+      }
+
+      // Fallback: find any div that has the page name and seems clickable
+      const allSpans = dialog.querySelectorAll('span');
+      for (const span of allSpans) {
+        if (span.textContent?.trim() === name) {
+          // Walk up to find clickable parent
+          let parent = span.parentElement;
+          for (let i = 0; i < 5 && parent; i++) {
+            const role = parent.getAttribute("role");
+            const tabindex = parent.getAttribute("tabindex");
+            if (role === "radio" || role === "option" || role === "button" || tabindex === "0") {
+              (parent as HTMLElement).click();
+              return `Clicked parent with role="${role}" tabindex="${tabindex}"`;
+            }
+            parent = parent.parentElement;
+          }
+          // Last resort: click the span's closest interactive ancestor
+          const closest = span.closest('[role="radio"], [role="option"], [role="button"], [tabindex="0"], a');
+          if (closest) {
+            (closest as HTMLElement).click();
+            return `Clicked closest interactive: ${closest.tagName} role="${closest.getAttribute("role")}"`;
+          }
+        }
+      }
+    }
+    return null;
+  }, pageName);
+
+  if (switched) {
+    console.log(`[switch] ${switched}`);
+    // Wait for Facebook to process the switch (page reload/redirect)
+    await page.waitForTimeout(5000);
+    // Verify
+    const currentUrl = page.url();
+    console.log(`[switch] After switch URL: ${currentUrl}`);
+    setCurrentPage(pageName);
+  } else {
+    console.log(`[switch] Warning: could not find clickable element for ${pageName}`);
+    setCurrentPage(pageName);
+  }
+}
+
 // --- Scanning ---
 
-export interface ScannedPost { url: string; text: string; author: string; timestamp: string; }
+export interface ScannedPost {
+  url: string;
+  text: string;
+  author: string;
+  timestamp: string;
+  commentCount: number;
+  hasImage: boolean;
+  hasVideo: boolean;
+  reactionCount: string;
+}
 
 export async function scanTargetPosts(targetUrl: string, limit = 10): Promise<ScannedPost[]> {
+  const { emitAction, emitDone, setPreviewActive, startScreencast } = await import("./preview");
+  setPreviewActive(true);
   const ctx = await connectToChrome();
   const page = await ctx.newPage();
+  const stopCapture = await startScreencast(page);
   try {
+    emitAction(`Scanning target: ${targetUrl}`);
     await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(2000);
+    emitAction("Scrolling to load posts...");
     for (let i = 0; i < 3; i++) {
       await page.evaluate(() => window.scrollBy(0, 1000));
       await page.waitForTimeout(1000);
     }
     const posts = await page.evaluate((maxPosts: number) => {
-      const results: { url: string; text: string; author: string; timestamp: string }[] = [];
+      const results: { url: string; text: string; author: string; timestamp: string; commentCount: number; hasImage: boolean; hasVideo: boolean; reactionCount: string }[] = [];
       const allArticles = document.querySelectorAll('[role="article"]');
       const articles: Element[] = [];
       for (const el of allArticles) {
@@ -166,14 +272,38 @@ export async function scanTargetPosts(targetUrl: string, limit = 10): Promise<Sc
         let author = "";
         const strongEl = el.querySelector("strong");
         if (strongEl) author = strongEl.textContent?.trim() || "";
+
+        // Comment count
+        let commentCount = 0;
+        const allText = el.textContent || "";
+        const commentMatch = allText.match(/(\d+)\s*(ความคิดเห็น|comments?)/i);
+        if (commentMatch) commentCount = parseInt(commentMatch[1]);
+
+        // Reaction count
+        let reactionCount = "";
+        const reactionEl = el.querySelector('[aria-label*="reaction"], [aria-label*="ถูกใจ"], [aria-label*="like"]');
+        if (reactionEl) reactionCount = reactionEl.textContent?.trim() || "";
+        if (!reactionCount) {
+          const rcMatch = allText.match(/(\d+[\d,.]*)\s*(ถูกใจ|likes?)/i);
+          if (rcMatch) reactionCount = rcMatch[1];
+        }
+
+        // Media type
+        const hasImage = el.querySelectorAll('img[src*="scontent"], img[src*="fbcdn"]').length > 1;
+        const hasVideo = el.querySelectorAll('video, [aria-label*="video"], [aria-label*="วิดีโอ"], [data-video-id]').length > 0;
+
         if (text || url) {
-          results.push({ url: url.startsWith("http") ? url : url ? `https://www.facebook.com${url}` : "", text, author, timestamp });
+          results.push({
+            url: url.startsWith("http") ? url : url ? `https://www.facebook.com${url}` : "",
+            text, author, timestamp, commentCount, hasImage, hasVideo, reactionCount,
+          });
         }
       }
       return results;
     }, limit);
+    emitDone(`Scan complete — found ${posts.length} posts`);
     return posts;
-  } finally { await page.close(); }
+  } finally { stopCapture(); setPreviewActive(false); await page.close(); }
 }
 
 // --- Commenting (with rate limit) ---
@@ -188,15 +318,19 @@ export async function sendComment(postUrl: string, commentText: string): Promise
     await new Promise((r) => setTimeout(r, wait));
   }
 
+  const { emitAction, emitDone, emitError, setPreviewActive, startScreencast } = await import("./preview");
+  setPreviewActive(true);
   const ctx = await connectToChrome();
   const page = await ctx.newPage();
+  const stopCapture = await startScreencast(page);
   try {
-    // Random delay (human-like)
+    emitAction(`Preparing to comment on post...`);
     await page.waitForTimeout(1000 + Math.random() * 2000);
     await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 
-    // Open comment box (Reels have a button)
+    // Open comment box
+    emitAction("Opening comment box...");
     const commentBtn = page.locator('[aria-label="แสดงความคิดเห็น"], [aria-label="Comment"], [aria-label="Write a comment"]').first();
     if (await commentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await commentBtn.click();
@@ -208,21 +342,25 @@ export async function sendComment(postUrl: string, commentText: string): Promise
     await commentBox.click({ timeout: 10000 });
     await page.waitForTimeout(500);
 
-    // Type (human-like speed)
+    // Type
+    emitAction(`Typing comment: "${commentText.slice(0, 50)}..."`);
     for (const char of commentText) {
       await page.keyboard.type(char, { delay: 30 + Math.random() * 70 });
     }
 
     // Send
+    emitAction("Sending comment...");
     await page.waitForTimeout(500);
     await page.keyboard.press("Enter");
     await page.waitForTimeout(3000);
 
     lastCommentTime = Date.now();
+    emitDone("Comment sent successfully");
     return { success: true };
   } catch (error) {
+    emitError(`Comment failed: ${error instanceof Error ? error.message : String(error)}`);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
-  } finally { await page.close(); }
+  } finally { stopCapture(); setPreviewActive(false); await page.close(); }
 }
 
 // --- Fetch page name ---

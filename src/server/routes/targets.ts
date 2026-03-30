@@ -26,14 +26,41 @@ app.post("/resolve", async (c) => {
   }
 });
 
-// Discover engagers from our own page
+// Discover engagers from our own page — auto-save all as targets
 app.post("/discover", async (c) => {
   const body = await c.req.json<{ pageUrl: string; postsToScan?: number }>();
   if (!body.pageUrl) return c.json({ error: "pageUrl required" }, 400);
 
   try {
     const engagers = await discoverEngagers(body.pageUrl, body.postsToScan || 5);
-    return c.json({ engagers, total: engagers.length });
+
+    // Auto-save all discovered engagers as targets
+    let added = 0;
+    let updated = 0;
+    for (const e of engagers) {
+      const existing = await db.select().from(schema.targets).where(eq(schema.targets.url, e.url)).get();
+      if (existing) {
+        // Update interaction count + lastSeen
+        await db.update(schema.targets).set({
+          interactionCount: e.interactionCount,
+          lastSeen: e.lastSeen,
+          name: e.name,
+        }).where(eq(schema.targets.id, existing.id));
+        updated++;
+      } else {
+        await db.insert(schema.targets).values({
+          name: e.name,
+          url: e.url,
+          pageId: extractPageId(e.url),
+          interactionCount: e.interactionCount,
+          lastSeen: e.lastSeen,
+          source: "discover",
+        });
+        added++;
+      }
+    }
+
+    return c.json({ engagers, total: engagers.length, added, updated });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
@@ -41,9 +68,27 @@ app.post("/discover", async (c) => {
 
 // Add target from discovered engager (or manual)
 app.post("/", async (c) => {
-  const body = await c.req.json<{ name?: string; url: string }>();
+  const body = await c.req.json<{ name?: string; url: string; interactionCount?: number; source?: string }>();
   if (!body.url) {
     return c.json({ error: "url required" }, 400);
+  }
+
+  // Check if already exists
+  const existing = await db.select().from(schema.targets).where(eq(schema.targets.url, body.url)).get();
+  if (existing) {
+    // Update interaction count if higher
+    if (body.interactionCount && body.interactionCount > (existing.interactionCount || 0)) {
+      const updated = await db
+        .update(schema.targets)
+        .set({
+          interactionCount: body.interactionCount,
+          lastSeen: new Date().toISOString(),
+        })
+        .where(eq(schema.targets.id, existing.id))
+        .returning();
+      return c.json(updated[0]);
+    }
+    return c.json(existing);
   }
 
   // Auto-fetch name if not provided
@@ -60,7 +105,14 @@ app.post("/", async (c) => {
 
   const result = await db
     .insert(schema.targets)
-    .values({ name, url: body.url, pageId })
+    .values({
+      name,
+      url: body.url,
+      pageId,
+      interactionCount: body.interactionCount || 0,
+      lastSeen: new Date().toISOString(),
+      source: body.source || "manual",
+    })
     .returning();
 
   return c.json(result[0], 201);

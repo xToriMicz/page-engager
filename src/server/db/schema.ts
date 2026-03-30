@@ -6,6 +6,9 @@ export const targets = sqliteTable("targets", {
   url: text("url").notNull(),
   pageId: text("page_id"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  interactionCount: integer("interaction_count").notNull().default(0),
+  lastSeen: text("last_seen"),
+  source: text("source").default("manual"), // manual, discover
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
