@@ -46,6 +46,7 @@
       "oneClick": true,
       "allowToChangeInstallationDirectory": false
     },
+    "npmRebuild": false,
     "extraResources": [
       { "from": "data", "to": "data", "filter": ["**/*"] }
     ]

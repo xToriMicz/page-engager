@@ -5,3 +5,5 @@ data/
 *.db-journal
 .env
 .env
+release/
+dist/
