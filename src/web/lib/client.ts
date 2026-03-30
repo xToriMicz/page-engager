@@ -78,6 +78,9 @@ export const getStats = () => request<{ totalSent: number; todaySent: number; to
 // Chrome connection & pages
 export const getChromeStatus = () =>
   request<ChromeStatus>("/sessions/status");
+export const getHeadless = () => request<{ headless: boolean }>("/sessions/headless");
+export const setHeadless = (headless: boolean) =>
+  request<{ headless: boolean; message: string }>("/sessions/headless", { method: "POST", body: JSON.stringify({ headless }) });
 export const getPages = () =>
   request<PageInfo[]>("/sessions/pages");
 export const switchPage = (pageName: string) =>

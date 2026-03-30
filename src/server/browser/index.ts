@@ -9,7 +9,14 @@ let lastCommentTime = 0;
 let profileSwitched = false;
 let reusablePage: import("playwright").Page | null = null; // shared page for lightweight ops
 
-const HEADLESS = process.env.HEADLESS !== "false"; // default headless — set HEADLESS=false to see browser
+let HEADLESS = process.env.HEADLESS !== "false"; // default headless — set HEADLESS=false to see browser
+
+export function isHeadless() { return HEADLESS; }
+export async function setHeadless(val: boolean) {
+  if (HEADLESS === val) return;
+  HEADLESS = val;
+  await closeBrowser(); // restart browser with new mode on next action
+}
 const CHROME_PROFILE = process.env.CHROME_PROFILE || "Profile 8";
 const MIN_COMMENT_INTERVAL = 30_000; // 30 seconds between comments
 

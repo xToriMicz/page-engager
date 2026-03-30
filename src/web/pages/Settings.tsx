@@ -16,6 +16,7 @@ export function Settings({ onPageChange }: Props) {
   const [pages, setPages] = useState<ManagedPage[]>([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [headless, setHeadless] = useState(true);
   const { toast } = useToast();
 
   const loadStatus = () => api.getChromeStatus().then(setStatus).catch(() => setStatus(null));
@@ -39,7 +40,10 @@ export function Settings({ onPageChange }: Props) {
     setLoading(false);
   };
 
-  useEffect(() => { loadStatus(); loadPages(); }, []);
+  useEffect(() => {
+    loadStatus(); loadPages();
+    api.getHeadless().then((r) => setHeadless(r.headless)).catch(() => {});
+  }, []);
 
   const handleSwitch = async (pageName: string) => {
     setSwitching(pageName);
@@ -107,6 +111,39 @@ export function Settings({ onPageChange }: Props) {
             })}
           </div>
         )}
+      </Card>
+
+      {/* Browser Mode */}
+      <Card>
+        <CardTitle>Browser Mode</CardTitle>
+        <div className="mt-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-foreground">
+              {headless ? "Headless (Preview)" : "Visible Browser"}
+            </div>
+            <p className="text-xs text-subtle mt-0.5">
+              {headless
+                ? "Browser runs hidden — watch in Preview PiP"
+                : "Browser window opens on screen — 60 FPS real view"}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const next = !headless;
+              setHeadless(next);
+              const result = await api.setHeadless(next);
+              toast(result.message, "success");
+              loadStatus();
+            }}
+            className={`relative w-12 h-6 rounded-full transition-colors duration-200 cursor-pointer border-none ${
+              headless ? "bg-primary" : "bg-success"
+            }`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+              headless ? "left-0.5" : "left-6"
+            }`} />
+          </button>
+        </div>
       </Card>
 
       {/* Connection */}

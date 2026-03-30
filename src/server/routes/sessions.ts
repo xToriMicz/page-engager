@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { isConnected, getChromeInfo, closeBrowser, listManagedPages, switchToPage, getCurrentPage } from "../browser";
+import { isConnected, getChromeInfo, closeBrowser, listManagedPages, switchToPage, getCurrentPage, isHeadless, setHeadless } from "../browser";
 
 const app = new Hono();
 
@@ -68,6 +68,17 @@ app.get("/screenshot", async (c) => {
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
+});
+
+// Toggle headless mode
+app.get("/headless", (c) => {
+  return c.json({ headless: isHeadless() });
+});
+
+app.post("/headless", async (c) => {
+  const { headless } = await c.req.json();
+  await setHeadless(!!headless);
+  return c.json({ headless: isHeadless(), message: headless ? "Headless ON — watch in Preview" : "Headless OFF — visible browser" });
 });
 
 // Close Playwright connection
