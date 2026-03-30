@@ -143,7 +143,11 @@ export async function listManagedPages(): Promise<ManagedPage[]> {
       return results;
     });
     return pages;
-  } finally { await page.close(); }
+  } catch (e) {
+    // If reusable page broke, clear it
+    reusablePage = null;
+    throw e;
+  }
 }
 
 export async function switchToPage(pageName: string): Promise<{ success: boolean; error?: string }> {
@@ -450,8 +454,7 @@ export async function sendComment(postUrl: string, commentText: string): Promise
 // --- Fetch page name ---
 
 export async function fetchPageName(url: string): Promise<string> {
-  const ctx = await connectToChrome();
-  const page = await ctx.newPage();
+  const page = await getReusablePage();
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
@@ -461,5 +464,8 @@ export async function fetchPageName(url: string): Promise<string> {
     const clean = title?.replace(/\s*[|\-—–]\s*Facebook\s*$/i, "").trim();
     if (clean && clean !== "Facebook" && !clean.includes("log in")) return clean;
     throw new Error("Could not extract page name");
-  } finally { await page.close(); }
+  } catch (e) {
+    reusablePage = null;
+    throw e;
+  }
 }

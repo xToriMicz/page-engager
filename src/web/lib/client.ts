@@ -54,6 +54,12 @@ export const sendComment = (data: {
 export const analyzePost = (postText: string) =>
   request<{ type: string; rating: number; summary: string }>("/comments/analyze", { method: "POST", body: JSON.stringify({ postText }) });
 
+// Batch AI — analyze + generate for multiple posts at once
+export const batchAI = (posts: { text: string; index: number }[]) =>
+  request<{ results: { index: number; comment: string; analysis: { type: string; rating: number; summary: string } }[] }>(
+    "/comments/batch-ai", { method: "POST", body: JSON.stringify({ posts }) }
+  );
+
 // Activity
 export const getActivityLog = () => request<{ log: any[]; total: number }>("/activity/log");
 export const getReport = (days = 7) => request<any>(`/activity/report?days=${days}`);

@@ -102,24 +102,20 @@ export function Dashboard({ currentPage }: Props) {
       }
     }
 
-    // AI analyze + generate comments — 3 at a time in parallel
+    // AI analyze + generate comments — single batch API call
     setScanProgress("AI analyzing posts...");
-    const BATCH_SIZE = 3;
-    for (let batch = 0; batch < allPosts.length; batch += BATCH_SIZE) {
-      const chunk = allPosts.slice(batch, batch + BATCH_SIZE);
-      setGenerating(batch);
-      await Promise.all(chunk.map(async (post: any, j: number) => {
-        const i = batch + j;
-        if (!post.text) return;
-        try {
-          const [ai, analysis] = await Promise.all([
-            api.generateComment(post.text),
-            api.analyzePost(post.text),
-          ]);
-          setCommentTexts((prev) => ({ ...prev, [i]: ai.comment }));
-          setAnalyses((prev) => ({ ...prev, [i]: analysis }));
-        } catch {}
-      }));
+    const postsWithText = allPosts
+      .map((p: any, i: number) => p.text ? { text: p.text, index: i } : null)
+      .filter(Boolean) as { text: string; index: number }[];
+    if (postsWithText.length > 0) {
+      setGenerating(0);
+      try {
+        const { results } = await api.batchAI(postsWithText);
+        for (const r of results) {
+          if (r.comment) setCommentTexts((prev) => ({ ...prev, [r.index]: r.comment }));
+          if (r.analysis) setAnalyses((prev) => ({ ...prev, [r.index]: r.analysis }));
+        }
+      } catch {}
     }
     setGenerating(null);
     setScanProgress("");

@@ -82,6 +82,29 @@ app.post("/scan/:targetId", async (c) => {
   }
 });
 
+// Batch AI — analyze + generate for multiple posts in parallel
+app.post("/batch-ai", async (c) => {
+  const body = await c.req.json<{ posts: { text: string; index: number }[] }>();
+  if (!body.posts?.length) return c.json({ error: "posts required" }, 400);
+
+  const pageName = getCurrentPage() || "เพจ";
+  const results = await Promise.all(
+    body.posts.map(async (post) => {
+      try {
+        const [comment, analysis] = await Promise.all([
+          generateComment(post.text, pageName),
+          analyzePost(post.text),
+        ]);
+        return { index: post.index, comment, analysis };
+      } catch {
+        return { index: post.index, comment: "", analysis: { type: "normal", rating: 3, summary: "" } };
+      }
+    })
+  );
+
+  return c.json({ results });
+});
+
 // AI generate comment from post content
 app.post("/generate", async (c) => {
   const body = await c.req.json<{ postText: string }>();
