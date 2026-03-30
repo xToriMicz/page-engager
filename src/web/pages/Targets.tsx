@@ -148,9 +148,10 @@ export function Targets() {
             className="flex-1"
           />
           <Button onClick={() => handleAdd()} disabled={!url.trim() || adding}>
-            {adding ? "..." : "Add"}
+            {adding ? "Adding..." : "Add"}
           </Button>
         </div>
+        <p className="text-xs text-subtle mt-1">Auto-fetches page name from Facebook</p>
       </Card>
 
       {/* Current targets */}

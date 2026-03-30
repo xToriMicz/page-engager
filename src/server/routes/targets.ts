@@ -40,9 +40,9 @@ app.post("/discover", async (c) => {
     for (const e of engagers) {
       const existing = await db.select().from(schema.targets).where(eq(schema.targets.url, e.url)).get();
       if (existing) {
-        // Update interaction count + lastSeen
+        // Accumulate interaction count + update lastSeen
         await db.update(schema.targets).set({
-          interactionCount: e.interactionCount,
+          interactionCount: (existing.interactionCount || 0) + e.interactionCount,
           lastSeen: e.lastSeen,
           name: e.name,
         }).where(eq(schema.targets.id, existing.id));
@@ -97,7 +97,9 @@ app.post("/", async (c) => {
     try {
       name = await fetchPageName(body.url);
     } catch {
-      name = body.url;
+      // Fallback: extract from URL
+      const urlMatch = body.url.match(/facebook\.com\/([a-zA-Z0-9._-]+)/);
+      name = urlMatch ? urlMatch[1] : body.url;
     }
   }
 
