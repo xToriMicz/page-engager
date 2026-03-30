@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { db, schema } from "../db";
 import { eq, desc } from "drizzle-orm";
-import { scanTargetPosts, sendComment } from "../browser";
+import { scanTargetPosts, sendComment, getCurrentPage } from "../browser";
+import { generateComment } from "../ai/generate-comment";
 
 const app = new Hono();
 
@@ -40,6 +41,20 @@ app.post("/scan/:targetId", async (c) => {
       }, 400);
     }
     return c.json({ error: msg }, 500);
+  }
+});
+
+// AI generate comment from post content
+app.post("/generate", async (c) => {
+  const body = await c.req.json<{ postText: string }>();
+  if (!body.postText) return c.json({ error: "postText required" }, 400);
+
+  try {
+    const pageName = getCurrentPage() || "เพจ";
+    const comment = await generateComment(body.postText, pageName);
+    return c.json({ comment });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
   }
 });
 

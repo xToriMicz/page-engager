@@ -16,6 +16,7 @@ export function Dashboard({ currentPage }: Props) {
   const [scanning, setScanning] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -59,6 +60,19 @@ export function Dashboard({ currentPage }: Props) {
       toast(e.message, "error");
     }
     setSending(false);
+  };
+
+  const handleGenerate = async (postText: string) => {
+    if (!postText) return;
+    setGenerating(true);
+    try {
+      const result = await api.generateComment(postText);
+      setCommentText(result.comment);
+      toast("AI generated", "success");
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+    setGenerating(false);
   };
 
   const sentToday = comments.filter((c) => {
@@ -123,8 +137,16 @@ export function Dashboard({ currentPage }: Props) {
               <p className="text-sm text-muted leading-relaxed mb-3 line-clamp-3">
                 {post.text || <span className="italic text-subtle">No text content</span>}
               </p>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {templates.map((t) => (
+              <div className="flex gap-2 mb-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleGenerate(post.text)}
+                  disabled={generating || !post.text}
+                >
+                  {generating ? "Generating..." : "AI Generate"}
+                </Button>
+                {templates.slice(0, 3).map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setCommentText(t.content)}
@@ -138,7 +160,7 @@ export function Dashboard({ currentPage }: Props) {
                 <Input
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Type comment..."
+                  placeholder="AI จะ generate ให้ หรือพิมพ์เอง..."
                   className="flex-1"
                 />
                 <Button variant="success" onClick={() => handleSend(post)} disabled={sending || !commentText.trim() || noPage}>

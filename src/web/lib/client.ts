@@ -31,6 +31,8 @@ export const deleteTemplate = (id: number) =>
   request<{ success: boolean }>(`/templates/${id}`, { method: "DELETE" });
 
 // Comments
+export const generateComment = (postText: string) =>
+  request<{ comment: string }>("/comments/generate", { method: "POST", body: JSON.stringify({ postText }) });
 export const getComments = () => request<Comment[]>("/comments");
 export const scanPosts = (targetId: number) =>
   request<ScanResult>(`/comments/scan/${targetId}`, { method: "POST" });
