@@ -433,6 +433,24 @@ export async function sendComment(postUrl: string, commentText: string): Promise
       await page.waitForTimeout(1000);
     }
 
+    // Like the post first (if not already liked)
+    emitAction("Liking post...");
+    const likeBtn = page.locator('[aria-label="ถูกใจ"], [aria-label="Like"]').first();
+    if (await likeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      // Check if already liked (button text changes to "เอาถูกใจออก" / "Unlike")
+      const alreadyLiked = await page.evaluate(() => {
+        const btn = document.querySelector('[aria-label="เอาถูกใจออก"], [aria-label="Unlike"], [aria-label="Remove Like"]');
+        return !!btn;
+      });
+      if (!alreadyLiked) {
+        await likeBtn.click();
+        emitAction("Liked!");
+        await page.waitForTimeout(1500 + Math.random() * 1500);
+      } else {
+        emitAction("Already liked");
+      }
+    }
+
     // Scroll down to make comment area visible
     emitAction("Opening comment box...");
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
