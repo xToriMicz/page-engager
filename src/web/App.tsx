@@ -5,13 +5,15 @@ import { Dashboard } from "./pages/Dashboard";
 import { Targets } from "./pages/Targets";
 import { Settings } from "./pages/Settings";
 import { Activity } from "./pages/Activity";
+import { CustomComments } from "./pages/CustomComments";
 import { PreviewPiP } from "./components/PreviewPiP";
 
-type Page = "dashboard" | "targets" | "activity" | "settings";
+type Page = "dashboard" | "targets" | "comments" | "activity" | "settings";
 
 const NAV: { key: Page; label: string; icon: string }[] = [
   { key: "dashboard", label: "Engage", icon: "E" },
   { key: "targets", label: "Targets", icon: "T" },
+  { key: "comments", label: "Comments", icon: "C" },
   { key: "activity", label: "Activity", icon: "A" },
   { key: "settings", label: "Settings", icon: "S" },
 ];
@@ -93,6 +95,7 @@ export function App() {
         <div className="max-w-3xl mx-auto p-4 md:p-6 animate-fade-in">
           {page === "dashboard" && <Dashboard currentPage={currentPage} />}
           {page === "targets" && <Targets />}
+          {page === "comments" && <CustomComments />}
           {page === "activity" && <Activity />}
           {page === "settings" && <Settings onPageChange={setCurrentPage} />}
         </div>

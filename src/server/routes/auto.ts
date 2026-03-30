@@ -109,15 +109,26 @@ app.post("/run", async (c) => {
         if (autoAbort) break;
         const post = toComment[pi];
 
-        // Generate AI comment
-        emitAction(`Generating comment for post ${pi + 1}/${toComment.length}...`);
+        // Pick custom comment (random) or generate AI
+        emitAction(`Preparing comment for post ${pi + 1}/${toComment.length}...`);
         let commentText: string;
-        try {
-          commentText = await generateComment(post.text || "โพสต์ทั่วไป", pageName);
-        } catch {
-          emitError(`AI generate failed, skipping`);
-          totalFailed++;
-          continue;
+        const customComments = await db.select().from(schema.templates)
+          .where(eq(schema.templates.category, "custom")).all();
+
+        if (customComments.length > 0) {
+          // Random pick from custom comments
+          const pick = customComments[Math.floor(Math.random() * customComments.length)];
+          commentText = pick.content;
+          emitAction(`Using custom comment: "${commentText.slice(0, 40)}..."`);
+        } else {
+          // AI generate
+          try {
+            commentText = await generateComment(post.text || "โพสต์ทั่วไป", pageName);
+          } catch {
+            emitError(`AI generate failed, skipping`);
+            totalFailed++;
+            continue;
+          }
         }
 
         if (!commentText.trim()) {

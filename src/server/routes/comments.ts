@@ -105,15 +105,25 @@ app.post("/batch-ai", async (c) => {
   return c.json({ results });
 });
 
-// AI generate comment from post content
+// Generate comment — custom first, AI fallback
 app.post("/generate", async (c) => {
   const body = await c.req.json<{ postText: string }>();
   if (!body.postText) return c.json({ error: "postText required" }, 400);
 
+  // Check for custom comments first
+  const customComments = await db.select().from(schema.templates)
+    .where(eq(schema.templates.category, "custom")).all();
+
+  if (customComments.length > 0) {
+    const pick = customComments[Math.floor(Math.random() * customComments.length)];
+    return c.json({ comment: pick.content, source: "custom" });
+  }
+
+  // AI generate
   try {
     const pageName = getCurrentPage() || "เพจ";
     const comment = await generateComment(body.postText, pageName);
-    return c.json({ comment });
+    return c.json({ comment, source: "ai" });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }
