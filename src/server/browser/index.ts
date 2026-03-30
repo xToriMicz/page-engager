@@ -283,21 +283,47 @@ export async function sendComment(
   try {
     await page.waitForTimeout(1000 + Math.random() * 2000);
     await page.goto(postUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
+    // Step 1: If a page is selected, try to switch "commenting as" to that page
+    if (currentPageName) {
+      // Look for the profile avatar/switcher near comment box
+      // FB shows a small avatar you can click to change "commenting as"
+      const commentAsBtn = page.locator(
+        '[aria-label*="Comment as"], [aria-label*="แสดงความคิดเห็นในฐานะ"]'
+      ).first();
+      const hasCommentAs = await commentAsBtn.isVisible({ timeout: 2000 }).catch(() => false);
+
+      if (hasCommentAs) {
+        await commentAsBtn.click();
+        await page.waitForTimeout(1000);
+        // Click the page name in the dropdown
+        const pageOption = page.locator(`text="${currentPageName}"`).first();
+        const hasOption = await pageOption.isVisible({ timeout: 2000 }).catch(() => false);
+        if (hasOption) {
+          await pageOption.click();
+          await page.waitForTimeout(1000);
+          console.log(`Switched commenting as: ${currentPageName}`);
+        }
+      }
+    }
+
+    // Step 2: Click comment box
     const commentBox = page.locator(
       '[aria-label="Write a comment"], [aria-label="เขียนความคิดเห็น"], [contenteditable="true"][role="textbox"]'
     );
     await commentBox.first().click();
     await page.waitForTimeout(500);
 
+    // Step 3: Type comment (human-like speed)
     for (const char of commentText) {
       await page.keyboard.type(char, { delay: 30 + Math.random() * 70 });
     }
 
+    // Step 4: Send
     await page.waitForTimeout(500);
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     return { success: true };
   } catch (error) {
